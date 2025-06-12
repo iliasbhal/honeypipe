@@ -1,5 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
+import { apiPlugin } from './plugins/apiPlugin';
+
+import { app } from './playground/server'
 
 import packageJSON from './package.json'
 
@@ -15,6 +18,9 @@ export default defineConfig({
   root: './playground',
   plugins: [
     react(),
+    apiPlugin({
+      app,
+    }),
     // externalize({
     //   externals: [
     //     "react", // Externalize "react", and all of its subexports (react/*), such as react/jsx-runtime
@@ -23,6 +29,9 @@ export default defineConfig({
     //   ],
     // }),
   ],
+  server: {
+    port: 5173,
+  },
   build: {
     emptyOutDir: true,
 

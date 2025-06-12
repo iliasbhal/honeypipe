@@ -14,8 +14,8 @@ interface ChannelConnection<ChannelType = Channel<any>> {
 export class Peer {
   static Channel = Channel;
 
-  private peerId: string;
-  private connections: Map<string, ChannelConnection<any>> = new Map(); // channelId -> connection
+  peerId: string;
+  connections: Map<string, ChannelConnection<any>> = new Map(); // channelId -> connection
 
   constructor(options: PeerOptions) {
     this.peerId = options.peerId;

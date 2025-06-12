@@ -73,10 +73,10 @@ export const WebRTCDebugger: React.FC<WebRTCDebuggerProps> = ({ peer, channelId 
       setConnectionStates(states);
 
       // Update actors state
-      const connection = (peer as any).connections.get(channelId);
+      const connection = peer.connections.get(channelId);
       if (connection) {
-        const mainSnapshot = connection.stateMachine.getSnapshot();
-        const pollingSnapshot = mainSnapshot.context.pollingActor?.getSnapshot();
+        const mainSnapshot = connection.nachine.getSnapshot();
+        const pollingSnapshot = mainSnapshot.context.webRTCSignalActor?.getSnapshot();
 
         const newActors: ActorState[] = [
           {

@@ -14,7 +14,7 @@ export class Channel<MessageType> {
   signalingAdapter: InMemorySignalingAdapter;
   private messageHandlers: Set<ChannelMessageHandler> = new Set();
   private connectedPeers: Map<string, Peer> = new Map(); // Should only have 2 peers max
-  private connectedPeer: any; // Reference to the peer that owns this channel
+  private room: any; // Reference to the room for message routing
   private isActive: boolean = true;
 
   constructor(id: string, signalingAdapter: InMemorySignalingAdapter, roomId?: string) {
@@ -39,28 +39,51 @@ export class Channel<MessageType> {
   }
 
   /**
-   * Set the connected peer reference (used for sending messages)
+   * Set the room reference for message routing
    */
-  setConnectedPeer(peer: any): void {
-    this.connectedPeer = peer;
+  setRoom(room: any): void {
+    this.room = room;
   }
 
   /**
    * Send message to the other peer in this channel
    */
   sendMessage(message: string, dataChannelLabel?: string): void {
-    if (!this.connectedPeer) {
-      console.warn(`[Channel ${this.id}] No connected peer to send message`);
+    if (!this.room) {
+      console.warn(`[Channel ${this.id}] No room connection to send message`);
       return;
     }
     
     const [peerId1, peerId2] = this.id.split(':')[1].split('-');
-    const targetPeerId = peerId1 === this.connectedPeer.peerId ? peerId2 : peerId1;
+    
+    // Find which room connection actor should handle this message
+    // We need to send via any peer's room connection actor
+    const roomConnectionActors = this.room.roomConnectionActors;
+    if (roomConnectionActors.size === 0) {
+      console.warn(`[Channel ${this.id}] No room connection actors available`);
+      return;
+    }
+
+    // Use the first available room connection actor to send the message
+    const firstActor = Array.from(roomConnectionActors.values())[0];
+    
+    // Determine target peer ID
+    const senderPeerId = Array.from(roomConnectionActors.keys())[0];
+    const targetPeerId = peerId1 === senderPeerId ? peerId2 : peerId1;
     
     if (dataChannelLabel) {
-      this.connectedPeer.sendMessageToDataChannel(this.roomId, targetPeerId, dataChannelLabel, message);
+      firstActor.send({
+        type: 'SEND_MESSAGE_TO_DATACHANNEL',
+        peerId: targetPeerId,
+        label: dataChannelLabel,
+        message: message
+      });
     } else {
-      this.connectedPeer.sendMessageToPeer(this.roomId, targetPeerId, message);
+      firstActor.send({
+        type: 'SEND_MESSAGE_TO_PEER',
+        peerId: targetPeerId,
+        message: message
+      });
     }
   }
 

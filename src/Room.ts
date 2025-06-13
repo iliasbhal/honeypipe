@@ -1,6 +1,9 @@
 import { InMemorySignalingAdapter } from './adapters/InMemorySignalingAdapter';
+import { createActor, Actor } from 'xstate';
+import { HoneyRoomConnection } from './machines/HoneyRoomConnection';
 
 export type RoomMessageHandler = (message: string, fromPeerId: string) => void;
+export type RoomPresenceHandler = (event: { type: 'join' | 'leave' | 'alive'; peerId: string; roomId: string }) => void;
 
 export class Room {
   id: string;
@@ -9,7 +12,8 @@ export class Room {
   private connectedPeerIds: Set<string> = new Set(); // Track peer IDs only
   private isActive: boolean = true;
   private messageHandlers: Set<RoomMessageHandler> = new Set();
-  private connectedPeer: any; // Reference to the peer that owns this room connection
+  private presenceHandlers: Set<RoomPresenceHandler> = new Set();
+  private roomConnectionActors: Map<string, Actor<typeof HoneyRoomConnection>> = new Map(); // peerId -> actor
 
   constructor(id: string, signalingAdapter: InMemorySignalingAdapter, rtcConfiguration?: RTCConfiguration) {
     this.id = id;
@@ -94,22 +98,115 @@ export class Room {
   }
 
   /**
-   * Set the connected peer reference (used for sending messages)
+   * Add a peer to the room and create room connection
    */
-  setConnectedPeer(peer: any): void {
-    this.connectedPeer = peer;
+  async addPeerConnection(peer: any): Promise<void> {
+    if (!this.isActive) {
+      throw new Error(`Cannot join stopped room ${this.id}`);
+    }
+
+    if (this.roomConnectionActors.has(peer.peerId)) {
+      console.log(`[Room ${this.id}] Peer ${peer.peerId} already connected`);
+      return;
+    }
+
+    console.log(`[Room ${this.id}] Adding peer ${peer.peerId}`);
+
+    // Create room connection actor for this peer
+    const roomConnectionActor = createActor(HoneyRoomConnection, {
+      input: {
+        room: this,
+        localPeer: peer,
+        rtcConfiguration: this.rtcConfiguration,
+        parentRef: {
+          send: (event: any) => {
+            this.handleRoomConnectionEvent(event, peer.peerId);
+          }
+        }
+      },
+    });
+
+    this.roomConnectionActors.set(peer.peerId, roomConnectionActor);
+    this.connectedPeerIds.add(peer.peerId);
+
+    // Start the room connection actor
+    roomConnectionActor.start();
+    
+    // Join the room
+    roomConnectionActor.send({ type: 'JOIN_ROOM' });
+
+    console.log(`[Room ${this.id}] Started connection for peer ${peer.peerId}`);
+  }
+
+  /**
+   * Remove a peer from the room
+   */
+  async removePeerConnection(peerId: string): Promise<void> {
+    const roomConnectionActor = this.roomConnectionActors.get(peerId);
+    if (!roomConnectionActor) {
+      console.warn(`[Room ${this.id}] Peer ${peerId} not connected`);
+      return;
+    }
+
+    console.log(`[Room ${this.id}] Removing peer ${peerId}`);
+
+    // Send leave room event and wait for machine to reach final state
+    roomConnectionActor.send({ type: 'LEAVE_ROOM' });
+
+    // Wait for the state machine to properly close
+    await new Promise<void>((resolve) => {
+      const subscription = roomConnectionActor.subscribe((state) => {
+        if (state.value === 'disconnected') {
+          subscription.unsubscribe();
+          this.roomConnectionActors.delete(peerId);
+          this.connectedPeerIds.delete(peerId);
+          resolve();
+        }
+      });
+
+      // Fallback timeout
+      setTimeout(() => {
+        subscription.unsubscribe();
+        roomConnectionActor.stop();
+        this.roomConnectionActors.delete(peerId);
+        this.connectedPeerIds.delete(peerId);
+        resolve();
+      }, 1000);
+    });
+
+    console.log(`[Room ${this.id}] Removed peer ${peerId}`);
   }
 
   /**
    * Send message to all peers in the room
    */
   sendMessage(message: string): void {
-    if (!this.connectedPeer) {
-      console.warn(`[Room ${this.id}] No connected peer to send message`);
+    if (this.roomConnectionActors.size === 0) {
+      console.warn(`[Room ${this.id}] No connected peers to send message`);
       return;
     }
     
-    this.connectedPeer.sendMessageToAll(this.id, message);
+    // Send to all connected peers
+    this.roomConnectionActors.forEach((actor) => {
+      actor.send({
+        type: 'SEND_MESSAGE_TO_ALL',
+        message: message,
+        broadcast: true
+      } as any);
+    });
+  }
+
+  /**
+   * Get a channel for communication between two peers in this room
+   */
+  getChannel(peerId1: string, peerId2: string): any {
+    const { Channel } = require('./Channel');
+    const sortedPeerIds = [peerId1, peerId2].sort();
+    const channelId = `${this.id}:${sortedPeerIds[0]}-${sortedPeerIds[1]}`;
+    
+    const channel = new Channel(channelId, this.signalingAdapter, this.id);
+    channel.setRoom(this);
+    return channel;
   }
 
   /**
@@ -125,6 +222,41 @@ export class Room {
   }
 
   /**
+   * Register a handler for room presence updates
+   */
+  onPresence(handler: RoomPresenceHandler): () => void {
+    this.presenceHandlers.add(handler);
+    
+    // Return cleanup function  
+    return () => {
+      this.presenceHandlers.delete(handler);
+    };
+  }
+
+  /**
+   * Handle events from room connection actors
+   */
+  private handleRoomConnectionEvent(event: any, fromPeerId: string): void {
+    console.log(`[Room ${this.id}] Event from ${fromPeerId}:`, event);
+    
+    switch (event.type) {
+      case 'ROOM_MESSAGE_RECEIVED':
+        if (event.broadcast) {
+          // Route to room message handlers
+          this.notifyMessageHandlers(event.message, event.fromPeerId);
+        }
+        // Note: non-broadcast messages will be routed to channels directly
+        break;
+      case 'ROOM_PEER_CONNECTED':
+        this.notifyPresenceHandlers({ type: 'join', peerId: event.peerId, roomId: event.roomId });
+        break;
+      case 'ROOM_PEER_DISCONNECTED':
+        this.notifyPresenceHandlers({ type: 'leave', peerId: event.peerId, roomId: event.roomId });
+        break;
+    }
+  }
+
+  /**
    * Notify all message handlers of incoming message
    */
   notifyMessageHandlers(message: string, fromPeerId: string): void {
@@ -133,6 +265,19 @@ export class Room {
         handler(message, fromPeerId);
       } catch (error) {
         console.error(`[Room ${this.id}] Error in message handler:`, error);
+      }
+    });
+  }
+
+  /**
+   * Notify all presence handlers of presence event
+   */
+  notifyPresenceHandlers(event: { type: 'join' | 'leave' | 'alive'; peerId: string; roomId: string }): void {
+    this.presenceHandlers.forEach(handler => {
+      try {
+        handler(event);
+      } catch (error) {
+        console.error(`[Room ${this.id}] Error in presence handler:`, error);
       }
     });
   }

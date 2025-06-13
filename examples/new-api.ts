@@ -23,10 +23,10 @@ async function newApiExample() {
   const charlie = new Peer({ peerId: 'charlie' });
 
   // ============================================================================
-  // STEP 1: Setup Room message handlers
+  // STEP 1: Setup Room message and presence handlers
   // ============================================================================
 
-  // Each peer sets up their own room message handler
+  // Room handles message broadcasting - each peer can listen
   const aliceRoomCleanup = gameRoom.onMessage((message, fromPeerId) => {
     console.log(`[Alice] 📢 Room broadcast from ${fromPeerId}: "${message}"`);
   });
@@ -35,8 +35,8 @@ async function newApiExample() {
     console.log(`[Bob] 📢 Room broadcast from ${fromPeerId}: "${message}"`);
   });
 
-  // Alice listens for presence updates
-  const alicePresenceCleanup = alice.onPresence((event) => {
+  // Room also handles presence updates
+  const alicePresenceCleanup = gameRoom.onPresence((event) => {
     console.log(`[Alice] 👥 ${event.peerId} ${event.type}ed room ${event.roomId}`);
   });
 
@@ -70,11 +70,11 @@ async function newApiExample() {
 
   console.log('\n--- Direct Peer-to-Peer Messaging ---');
   
-  // Alice gets a direct channel to Bob (now includes room ID)
-  const aliceToBobChannel = alice.getChannelWith('bob', gameRoom.id);
+  // Peer gets a channel via the room they're both connected to
+  const aliceToBobChannel = alice.getChannelWith('bob', gameRoom);
   
   // Bob gets the same channel (deterministic channel ID with room prefix)
-  const bobToAliceChannel = bob.getChannelWith('alice', gameRoom.id);
+  const bobToAliceChannel = bob.getChannelWith('alice', gameRoom);
   
   console.log(`Alice's channel ID: ${aliceToBobChannel.id}`);
   console.log(`Bob's channel ID: ${bobToAliceChannel.id}`);
@@ -152,10 +152,15 @@ async function newApiExample() {
  *    - Channel messages have `broadcast: false` flag
  *    - Messages are automatically routed to correct handlers
  * 
- * 5. **Cleaner separation of concerns**:
- *    - Room handles presence and broadcasting
- *    - Channel handles peer-to-peer communication
- *    - Peer manages connections and presence events
+ * 5. **Lightweight Peer class**:
+ *    - Peer tracks connected rooms
+ *    - Most functionality moved to Room and Channel classes
+ *    - Clean separation of concerns: Room (presence/broadcasting), Channel (P2P), Peer (connections)
+ * 
+ * 6. **Simplified API**:
+ *    - `peer.getChannelWith(peerId, room)` gets channel via room
+ *    - `room.onMessage()` and `room.onPresence()` for room events
+ *    - `channel.onMessage()` for peer-to-peer messages
  */
 
 export { newApiExample };

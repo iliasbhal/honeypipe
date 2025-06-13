@@ -87,8 +87,9 @@ describe('HoneyPresenceSignal', () => {
     })
 
     // Should send join event
-    expect(pushSpy).toHaveBeenCalledWith(channel.id, {
+    expect(pushSpy).toHaveBeenCalledWith({
       peerId: 'test-peer-1',
+      roomId: channel.id,
       type: 'join'
     })
   })
@@ -123,8 +124,9 @@ describe('HoneyPresenceSignal', () => {
     expect(snapshot.value).toBe('inactive')
 
     // Should send leave event
-    expect(pushSpy).toHaveBeenCalledWith(channel.id, {
+    expect(pushSpy).toHaveBeenCalledWith({
       peerId: 'test-peer-1',
+      roomId: channel.id,
       type: 'leave'
     })
   })
@@ -153,8 +155,9 @@ describe('HoneyPresenceSignal', () => {
     await vi.advanceTimersByTimeAsync(1000)
 
     // Should have sent alive event
-    expect(pushSpy).toHaveBeenCalledWith(channel.id, {
+    expect(pushSpy).toHaveBeenCalledWith({
       peerId: 'test-peer-1',
+      roomId: channel.id,
       type: 'alive'
     })
 
@@ -163,8 +166,9 @@ describe('HoneyPresenceSignal', () => {
     await vi.advanceTimersByTimeAsync(1000)
 
     // Should have sent another alive event
-    expect(pushSpy).toHaveBeenCalledWith(channel.id, {
+    expect(pushSpy).toHaveBeenCalledWith({
       peerId: 'test-peer-1',
+      roomId: channel.id,
       type: 'alive'
     })
 
@@ -173,10 +177,10 @@ describe('HoneyPresenceSignal', () => {
 
   it('should poll for presence events and notify parent', async () => {
     // Add some test events to the signaling adapter
-    await signalingAdapter.push(channel.id, { peerId: 'test-peer-2', type: 'join' })
-    await signalingAdapter.push(channel.id, { peerId: 'test-peer-3', type: 'join' })
-    await signalingAdapter.push(channel.id, { peerId: 'test-peer-2', type: 'leave' })
-    await signalingAdapter.push(channel.id, { peerId: 'test-peer-4', type: 'alive' })
+    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: channel.id, type: 'join' })
+    await signalingAdapter.push({ peerId: 'test-peer-3', roomId: channel.id, type: 'join' })
+    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: channel.id, type: 'leave' })
+    await signalingAdapter.push({ peerId: 'test-peer-4', roomId: channel.id, type: 'alive' })
 
     const actor = createActor(HoneyPresenceSignal, {
       input: {
@@ -197,11 +201,11 @@ describe('HoneyPresenceSignal', () => {
       type: 'PRESENCE_EVENTS',
       data: {
         events: [
-          { peerId: 'test-peer-2', type: 'join' },
-          { peerId: 'test-peer-3', type: 'join' },
-          { peerId: 'test-peer-2', type: 'leave' },
-          { peerId: 'test-peer-4', type: 'alive' },
-          { peerId: 'test-peer-1', type: 'join' } // Our actor's join event
+          { peerId: 'test-peer-2', roomId: channel.id, type: 'join' },
+          { peerId: 'test-peer-3', roomId: channel.id, type: 'join' },
+          { peerId: 'test-peer-2', roomId: channel.id, type: 'leave' },
+          { peerId: 'test-peer-4', roomId: channel.id, type: 'alive' },
+          { peerId: 'test-peer-1', roomId: channel.id, type: 'join' } // Our actor's join event
         ],
         newLastSeenIndex: 5
       },
@@ -213,18 +217,20 @@ describe('HoneyPresenceSignal', () => {
 
   it('should filter out non-presence events when polling', async () => {
     // Add mixed events to the signaling adapter
-    await signalingAdapter.push(channel.id, { peerId: 'test-peer-2', type: 'join' })
-    await signalingAdapter.push(channel.id, {
+    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: channel.id, type: 'join' })
+    await signalingAdapter.push({
       peerId: 'test-peer-2',
+      channelId: channel.id,
       type: 'sdpOffer',
       data: { type: 'offer', sdp: 'mock' }
     })
-    await signalingAdapter.push(channel.id, {
+    await signalingAdapter.push({
       peerId: 'test-peer-2',
+      channelId: channel.id,
       type: 'iceCandidate',
       data: { candidate: '', sdpMLineIndex: 0, sdpMid: '' }
     })
-    await signalingAdapter.push(channel.id, { peerId: 'test-peer-2', type: 'leave' })
+    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: channel.id, type: 'leave' })
 
     const actor = createActor(HoneyPresenceSignal, {
       input: {
@@ -245,11 +251,11 @@ describe('HoneyPresenceSignal', () => {
       type: 'PRESENCE_EVENTS',
       data: {
         events: [
-          { peerId: 'test-peer-2', type: 'join' },
-          { peerId: 'test-peer-2', type: 'leave' },
-          { peerId: 'test-peer-1', type: 'join' } // Our actor's join event
+          { peerId: 'test-peer-2', roomId: channel.id, type: 'join' },
+          { peerId: 'test-peer-2', roomId: channel.id, type: 'leave' },
+          { peerId: 'test-peer-1', roomId: channel.id, type: 'join' } // Our actor's join event
         ],
-        newLastSeenIndex: 5 // Total events including our join event
+        newLastSeenIndex: 3 // Only presence events: join, leave, our join
       },
       origin: 'presence-polling'
     })
@@ -283,8 +289,9 @@ describe('HoneyPresenceSignal', () => {
     // Wait for async action
     await new Promise(resolve => setTimeout(resolve, 10))
 
-    expect(pushSpy).toHaveBeenCalledWith(channel.id, {
+    expect(pushSpy).toHaveBeenCalledWith({
       peerId: 'test-peer-1',
+      roomId: channel.id,
       type: 'alive'
     })
 
@@ -347,7 +354,7 @@ describe('HoneyPresenceSignal', () => {
     await vi.advanceTimersByTimeAsync(2250)
 
     // Add a presence event
-    await signalingAdapter.push(channel.id, { peerId: 'test-peer-2', type: 'join' })
+    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: channel.id, type: 'join' })
 
     // Next poll should find the event and reset delay to base (1s)
     pullSpy.mockClear()
@@ -390,8 +397,9 @@ describe('HoneyPresenceSignal', () => {
     await vi.advanceTimersByTimeAsync(1000)
 
     // Should have sent alive event
-    expect(pushSpy).toHaveBeenCalledWith(channel.id, {
+    expect(pushSpy).toHaveBeenCalledWith({
       peerId: 'test-peer-1',
+      roomId: channel.id,
       type: 'alive'
     })
 

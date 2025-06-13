@@ -187,8 +187,9 @@ describe('HoneyPeerConnection', () => {
     // Wait for offer to be created and sent
     await new Promise(resolve => setTimeout(resolve, 100))
 
-    expect(pushSpy).toHaveBeenCalledWith(channel.id, {
+    expect(pushSpy).toHaveBeenCalledWith({
       peerId: 'peer-a',
+      channelId: channel.id,
       type: 'sdpOffer',
       data: expect.objectContaining({ type: 'offer' })
     })
@@ -240,8 +241,9 @@ describe('HoneyPeerConnection', () => {
 
     // Check if an answer was sent (if the connection didn't fail)
     if (snapshot.value === 'connected') {
-      expect(pushSpy).toHaveBeenCalledWith(channel.id, {
+      expect(pushSpy).toHaveBeenCalledWith({
         peerId: 'peer-z',
+        channelId: channel.id,
         type: 'sdpAnswer',
         data: expect.objectContaining({ type: 'answer' })
       })
@@ -306,8 +308,9 @@ describe('HoneyPeerConnection', () => {
 
     actor.send({ type: 'RTC_ICE_CANDIDATE', candidate: mockCandidate })
 
-    expect(pushSpy).toHaveBeenCalledWith(channel.id, {
+    expect(pushSpy).toHaveBeenCalledWith({
       peerId: 'peer-a',
+      channelId: channel.id,
       type: 'iceCandidate',
       data: mockCandidate
     })

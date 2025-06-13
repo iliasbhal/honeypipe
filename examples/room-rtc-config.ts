@@ -40,9 +40,11 @@ async function example() {
   await bob.leaveRoom(chatRoom);
 }
 
-// This demonstrates the architectural improvement:
+// This demonstrates the architectural improvements:
 // - RTC configuration is defined at the room level
 // - All peers in a room use the same RTC configuration  
 // - Different rooms can have different RTC configurations
 // - Peer class is now simpler and focused on peer behavior
+// - Room tracks peer IDs only (not instances) for distributed systems
+// - Peers in different browsers/runtimes can connect via peer IDs
 export { example };

@@ -1,9 +1,18 @@
 import { createActor, Actor } from 'xstate';
 import { HoneyRoomConnection } from './machines/HoneyRoomConnection';
 import { Room } from './Room';
+import { Channel } from './Channel';
 
 export interface PeerOptions {
   peerId: string;
+}
+
+export type PresenceHandler = (event: { type: 'join' | 'leave' | 'alive'; peerId: string; roomId: string }) => void;
+
+// Helper function to generate channel ID for peer-to-peer communication
+function generateChannelId(roomId: string, peerId1: string, peerId2: string): string {
+  const sortedPeerIds = [peerId1, peerId2].sort();
+  return `${roomId}:${sortedPeerIds[0]}-${sortedPeerIds[1]}`;
 }
 
 interface RoomConnection {
@@ -13,9 +22,12 @@ interface RoomConnection {
 
 export class Peer {
   static Room = Room;
+  static Channel = Channel;
 
   peerId: string;
   roomConnections: Map<string, RoomConnection> = new Map(); // roomId -> room connection
+  channels: Map<string, Channel<any>> = new Map(); // channelId -> channel for peer-to-peer
+  presenceHandlers: Set<PresenceHandler> = new Set();
 
   constructor(options: PeerOptions) {
     this.peerId = options.peerId;
@@ -47,8 +59,7 @@ export class Peer {
         rtcConfiguration: room.rtcConfiguration,
         parentRef: {
           send: (event: any) => {
-            console.log(`[${this.peerId}] Room connection event:`, event);
-            // Handle room connection events here
+            this.handleRoomConnectionEvent(event);
           }
         }
       },
@@ -60,8 +71,11 @@ export class Peer {
       roomConnectionActor
     });
 
-    // Add this peer to the room's peer list
-    room.addPeer(this);
+    // Add this peer's ID to the room's peer list
+    room.addPeer(this.peerId);
+    
+    // Set this peer as the connected peer for Room messaging
+    room.setConnectedPeer(this);
 
     // Start the room connection actor
     roomConnectionActor.start();
@@ -132,8 +146,9 @@ export class Peer {
 
     roomConnection.roomConnectionActor.send({
       type: 'SEND_MESSAGE_TO_ALL',
-      message: message
-    });
+      message: message,
+      broadcast: true
+    } as any);
   }
 
   sendMessageToDataChannel(roomId: string, peerId: string, label: string, message: string): void {
@@ -180,6 +195,111 @@ export class Peer {
     });
 
     await Promise.all(leavePromises);
+    
+    // Clear all handlers and channels
+    this.presenceHandlers.clear();
+    this.channels.clear();
+    
     console.log(`[${this.peerId}] Closed all connections`);
+  }
+
+  // ============================================================================
+  // NEW IMPROVED API
+  // ============================================================================
+
+
+  /**
+   * Get or create a Channel for communicating with another peer within a specific room
+   */
+  getChannelWith(peerId: string, roomId?: string, signalingAdapter = this.getDefaultSignalingAdapter()): Channel<any> {
+    // If no roomId provided, use the first available room
+    if (!roomId) {
+      const firstRoom = Array.from(this.roomConnections.keys())[0];
+      if (!firstRoom) {
+        throw new Error('No room connections available. Peer must join a room before creating channels.');
+      }
+      roomId = firstRoom;
+    }
+    
+    const channelId = generateChannelId(roomId, this.peerId, peerId);
+    
+    if (!this.channels.has(channelId)) {
+      const channel = new Channel<any>(channelId, signalingAdapter, roomId);
+      channel.setConnectedPeer(this);
+      this.channels.set(channelId, channel);
+    }
+    
+    return this.channels.get(channelId)!;
+  }
+
+
+  /**
+   * Register a handler for room presence updates
+   */
+  onPresence(handler: PresenceHandler): () => void {
+    this.presenceHandlers.add(handler);
+    
+    // Return cleanup function  
+    return () => {
+      this.presenceHandlers.delete(handler);
+    };
+  }
+
+  // ============================================================================
+  // INTERNAL METHODS
+  // ============================================================================
+
+  private handleRoomConnectionEvent(event: any): void {
+    console.log(`[${this.peerId}] Room connection event:`, event);
+    
+    switch (event.type) {
+      case 'ROOM_MESSAGE_RECEIVED':
+        if (event.broadcast) {
+          // Route to room message handlers
+          const room = this.getRoom(event.roomId);
+          if (room) {
+            room.notifyMessageHandlers(event.message, event.fromPeerId);
+          }
+        } else {
+          // Route to channel message handlers
+          const channelId = generateChannelId(event.roomId, this.peerId, event.fromPeerId);
+          const channel = this.channels.get(channelId);
+          if (channel) {
+            channel.notifyMessageHandlers(event.message, event.fromPeerId);
+          }
+        }
+        break;
+      case 'ROOM_PEER_CONNECTED':
+        this.notifyPresenceHandlers({ type: 'join', peerId: event.peerId, roomId: event.roomId });
+        break;
+      case 'ROOM_PEER_DISCONNECTED':
+        this.notifyPresenceHandlers({ type: 'leave', peerId: event.peerId, roomId: event.roomId });
+        break;
+    }
+  }
+
+
+  private notifyPresenceHandlers(event: { type: 'join' | 'leave' | 'alive'; peerId: string; roomId: string }): void {
+    this.presenceHandlers.forEach(handler => {
+      try {
+        handler(event);
+      } catch (error) {
+        console.error(`[${this.peerId}] Error in presence handler:`, error);
+      }
+    });
+  }
+
+  private getRoom(roomId: string): Room | undefined {
+    const roomConnection = this.roomConnections.get(roomId);
+    return roomConnection?.room;
+  }
+
+  private getDefaultSignalingAdapter() {
+    // Get signaling adapter from first available room
+    const firstRoom = Array.from(this.roomConnections.values())[0]?.room;
+    if (!firstRoom) {
+      throw new Error('No room connections available to get signaling adapter');
+    }
+    return firstRoom.signalingAdapter;
   }
 }

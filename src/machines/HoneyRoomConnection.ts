@@ -6,9 +6,9 @@ import { HoneyPresenceSignal } from './HoneyPresenceSignal';
 import { HoneyPeerConnection } from './HoneyPeerConnection';
 
 // Helper function to generate channel ID for peer-to-peer communication
-function generateChannelId(peerId1: string, peerId2: string): string {
+function generateChannelId(roomId: string, peerId1: string, peerId2: string): string {
   const sortedPeerIds = [peerId1, peerId2].sort();
-  return `${sortedPeerIds[0]}-${sortedPeerIds[1]}`;
+  return `${roomId}:${sortedPeerIds[0]}-${sortedPeerIds[1]}`;
 }
 
 interface HoneyRoomConnectionContext {
@@ -33,11 +33,11 @@ export type HoneyRoomConnectionEvent =
   | { type: 'LEAVE_ROOM' }
   | { type: 'PRESENCE_EVENTS'; data: { events: any[], newLastSeenIndex: number }; origin: string }
   | { type: 'SEND_MESSAGE_TO_PEER'; peerId: string; message: string }
-  | { type: 'SEND_MESSAGE_TO_ALL'; message: string }
+  | { type: 'SEND_MESSAGE_TO_ALL'; message: string; broadcast?: boolean }
   | { type: 'SEND_MESSAGE_TO_DATACHANNEL'; peerId: string; label: string; message: string }
   | { type: 'PEER_CONNECTION_ESTABLISHED'; remotePeerId: string }
   | { type: 'PEER_CONNECTION_CLOSED'; remotePeerId: string }
-  | { type: 'PEER_MESSAGE_RECEIVED'; remotePeerId: string; message: string }
+  | { type: 'PEER_MESSAGE_RECEIVED'; remotePeerId: string; message: string; broadcast?: boolean }
   | { type: 'CLOSE' };
 
 export const HoneyRoomConnection = x.setup({
@@ -120,8 +120,8 @@ export const HoneyRoomConnection = x.setup({
             }
             
             // Create a dedicated channel for this peer-to-peer connection
-            const channelId = generateChannelId(context.localPeer.id, peerId);
-            const peerChannel = new Channel(channelId, context.room.signalingAdapter);
+            const channelId = generateChannelId(context.room.id, context.localPeer.id, peerId);
+            const peerChannel = new Channel(channelId, context.room.signalingAdapter, context.room.id);
             
             // Spawn new peer connection
             const peerConnectionActor = spawn('honeyPeerConnection', {
@@ -185,7 +185,8 @@ export const HoneyRoomConnection = x.setup({
       context.peerConnections.forEach((peerConnection) => {
         peerConnection.send({
           type: 'SEND_MESSAGE',
-          message: event.message
+          message: event.message,
+          broadcast: true // Mark as broadcast message
         });
       });
     },
@@ -226,7 +227,8 @@ export const HoneyRoomConnection = x.setup({
         type: 'ROOM_MESSAGE_RECEIVED',
         roomId: context.room.id,
         fromPeerId: event.remotePeerId,
-        message: event.message
+        message: event.message,
+        broadcast: (event as any).broadcast || false // Pass through broadcast flag
       });
     },
     startPresenceSignal: ({ context }) => {

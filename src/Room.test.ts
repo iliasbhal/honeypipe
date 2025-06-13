@@ -85,6 +85,8 @@ describe('Room Integration', () => {
     
     expect(room.getPeerCount()).toBe(2)
     
+    // When room stops, it clears peer IDs but doesn't directly disconnect peers
+    // (In a real distributed system, peers would detect room closure through signaling)
     room.stop()
     expect(room.getPeerCount()).toBe(0)
     expect(room.isRoomActive()).toBe(false)
@@ -103,5 +105,24 @@ describe('Room Integration', () => {
       { urls: "stun:stun1.l.google.com:19302" }
     ])
     expect(roomWithDefaults.rtcConfiguration.iceCandidatePoolSize).toBe(10)
+  })
+
+  it('should track peer IDs only (not instances)', async () => {
+    expect(room.getConnectedPeerIds()).toEqual([])
+    
+    await peer1.joinRoom(room)
+    await peer2.joinRoom(room)
+    
+    const peerIds = room.getConnectedPeerIds()
+    expect(peerIds).toContain('alice')
+    expect(peerIds).toContain('bob')
+    expect(peerIds.length).toBe(2)
+    
+    await peer1.leaveRoom(room)
+    
+    const remainingPeerIds = room.getConnectedPeerIds()
+    expect(remainingPeerIds).toContain('bob')
+    expect(remainingPeerIds).not.toContain('alice')
+    expect(remainingPeerIds.length).toBe(1)
   })
 });

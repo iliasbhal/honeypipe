@@ -1,20 +1,25 @@
 import { InMemorySignalingAdapter } from './adapters/InMemorySignalingAdapter';
 import { Peer } from './Peer';
 
+export type ChannelMessageHandler = (message: string, fromPeerId: string) => void;
+
 /**
  * Channel represents a peer-to-peer communication channel between exactly two peers.
  * It handles SDP/ICE signaling and message passing for WebRTC connections.
  */
 export class Channel<MessageType> {
   __type!: MessageType;
-  id: string; // Format: "peerId1-peerId2" (alphabetically sorted)
+  id: string; // Format: "roomId:peerId1-peerId2" (alphabetically sorted)
+  roomId: string;
   signalingAdapter: InMemorySignalingAdapter;
-  private messageHandlers: Set<(message: MessageType) => void> = new Set();
+  private messageHandlers: Set<ChannelMessageHandler> = new Set();
   private connectedPeers: Map<string, Peer> = new Map(); // Should only have 2 peers max
+  private connectedPeer: any; // Reference to the peer that owns this channel
   private isActive: boolean = true;
 
-  constructor(id: string, signalingAdapter: InMemorySignalingAdapter) {
+  constructor(id: string, signalingAdapter: InMemorySignalingAdapter, roomId?: string) {
     this.id = id;
+    this.roomId = roomId || id.split(':')[0]; // Extract roomId from id if not provided
     this.signalingAdapter = signalingAdapter;
   }
 
@@ -26,19 +31,62 @@ export class Channel<MessageType> {
 
     try {
       const message = JSON.parse(messageStr) as MessageType;
-      this.messageHandlers.forEach(handler => handler(message));
+      // This is the old generic message handler - keeping for backward compatibility
+      // New string-based handlers are used for the improved API
     } catch (e) {
       console.error(`Failed to parse message on channel ${this.id}:`, e);
     }
   }
 
-  onMessage(callback: (message: MessageType) => void): () => void {
-    this.messageHandlers.add(callback);
+  /**
+   * Set the connected peer reference (used for sending messages)
+   */
+  setConnectedPeer(peer: any): void {
+    this.connectedPeer = peer;
+  }
+
+  /**
+   * Send message to the other peer in this channel
+   */
+  sendMessage(message: string, dataChannelLabel?: string): void {
+    if (!this.connectedPeer) {
+      console.warn(`[Channel ${this.id}] No connected peer to send message`);
+      return;
+    }
+    
+    const [peerId1, peerId2] = this.id.split(':')[1].split('-');
+    const targetPeerId = peerId1 === this.connectedPeer.peerId ? peerId2 : peerId1;
+    
+    if (dataChannelLabel) {
+      this.connectedPeer.sendMessageToDataChannel(this.roomId, targetPeerId, dataChannelLabel, message);
+    } else {
+      this.connectedPeer.sendMessageToPeer(this.roomId, targetPeerId, message);
+    }
+  }
+
+  /**
+   * Register a handler for incoming channel messages
+   */
+  onMessage(handler: ChannelMessageHandler): () => void {
+    this.messageHandlers.add(handler);
 
     // Return cleanup function
     return () => {
-      this.messageHandlers.delete(callback);
+      this.messageHandlers.delete(handler);
     };
+  }
+
+  /**
+   * Notify all message handlers of incoming message
+   */
+  notifyMessageHandlers(message: string, fromPeerId: string): void {
+    this.messageHandlers.forEach(handler => {
+      try {
+        handler(message, fromPeerId);
+      } catch (error) {
+        console.error(`[Channel ${this.id}] Error in message handler:`, error);
+      }
+    });
   }
 
   // Track a peer that has connected to this channel

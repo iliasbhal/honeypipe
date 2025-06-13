@@ -1,12 +1,15 @@
 import { InMemorySignalingAdapter } from './adapters/InMemorySignalingAdapter';
-import { Peer } from './Peer';
+
+export type RoomMessageHandler = (message: string, fromPeerId: string) => void;
 
 export class Room {
   id: string;
   signalingAdapter: InMemorySignalingAdapter;
   rtcConfiguration: RTCConfiguration;
-  private connectedPeers: Map<string, Peer> = new Map();
+  private connectedPeerIds: Set<string> = new Set(); // Track peer IDs only
   private isActive: boolean = true;
+  private messageHandlers: Set<RoomMessageHandler> = new Set();
+  private connectedPeer: any; // Reference to the peer that owns this room connection
 
   constructor(id: string, signalingAdapter: InMemorySignalingAdapter, rtcConfiguration?: RTCConfiguration) {
     this.id = id;
@@ -23,51 +26,45 @@ export class Room {
   }
 
   /**
-   * Add a peer to the room (for tracking purposes)
+   * Add a peer ID to the room (for tracking purposes)
    */
-  addPeer(peer: Peer): void {
+  addPeer(peerId: string): void {
     if (!this.isActive) {
       throw new Error(`Cannot add peer to stopped room ${this.id}`);
     }
-    this.connectedPeers.set(peer.id, peer);
-    console.log(`[Room ${this.id}] Added peer ${peer.id}`);
+    this.connectedPeerIds.add(peerId);
+    console.log(`[Room ${this.id}] Added peer ${peerId}`);
   }
 
   /**
    * Remove a peer from the room
    */
   removePeer(peerId: string): void {
-    if (this.connectedPeers.delete(peerId)) {
+    if (this.connectedPeerIds.delete(peerId)) {
       console.log(`[Room ${this.id}] Removed peer ${peerId}`);
     }
   }
 
   /**
-   * Get all connected peers
+   * Get all connected peer IDs
    */
-  getConnectedPeers(): Peer[] {
-    return Array.from(this.connectedPeers.values());
-  }
-
-  /**
-   * Get peer by ID
-   */
-  getPeer(peerId: string): Peer | undefined {
-    return this.connectedPeers.get(peerId);
+  getConnectedPeerIds(): string[] {
+    return Array.from(this.connectedPeerIds);
   }
 
   /**
    * Check if peer is connected to this room
    */
   hasPeer(peerId: string): boolean {
-    return this.connectedPeers.has(peerId);
+    return this.connectedPeerIds.has(peerId);
   }
+
 
   /**
    * Get the number of connected peers
    */
   getPeerCount(): number {
-    return this.connectedPeers.size;
+    return this.connectedPeerIds.size;
   }
 
   /**
@@ -84,12 +81,8 @@ export class Room {
     console.log(`[Room ${this.id}] Stopping room`);
     this.isActive = false;
     
-    // Disconnect all peers
-    this.connectedPeers.forEach((peer) => {
-      peer.leaveRoom(this);
-    });
-    
-    this.connectedPeers.clear();
+    // Clear all peer IDs (individual peers will handle their own cleanup)
+    this.connectedPeerIds.clear();
   }
 
   /**
@@ -98,5 +91,49 @@ export class Room {
   start(): void {
     console.log(`[Room ${this.id}] Starting room`);
     this.isActive = true;
+  }
+
+  /**
+   * Set the connected peer reference (used for sending messages)
+   */
+  setConnectedPeer(peer: any): void {
+    this.connectedPeer = peer;
+  }
+
+  /**
+   * Send message to all peers in the room
+   */
+  sendMessage(message: string): void {
+    if (!this.connectedPeer) {
+      console.warn(`[Room ${this.id}] No connected peer to send message`);
+      return;
+    }
+    
+    this.connectedPeer.sendMessageToAll(this.id, message);
+  }
+
+  /**
+   * Register a handler for incoming room messages
+   */
+  onMessage(handler: RoomMessageHandler): () => void {
+    this.messageHandlers.add(handler);
+    
+    // Return cleanup function
+    return () => {
+      this.messageHandlers.delete(handler);
+    };
+  }
+
+  /**
+   * Notify all message handlers of incoming message
+   */
+  notifyMessageHandlers(message: string, fromPeerId: string): void {
+    this.messageHandlers.forEach(handler => {
+      try {
+        handler(message, fromPeerId);
+      } catch (error) {
+        console.error(`[Room ${this.id}] Error in message handler:`, error);
+      }
+    });
   }
 }

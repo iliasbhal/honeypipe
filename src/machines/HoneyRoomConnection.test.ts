@@ -17,11 +17,11 @@ describe('HoneyRoomConnection', () => {
   beforeEach(() => {
     testId++
     signalingAdapter = new InMemorySignalingAdapter()
-    room = new Room(`test-room-${testId}`, signalingAdapter)
-    localPeer = new Peer({ peerId: 'local-peer' })
     rtcConfiguration = {
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
     }
+    room = new Room(`test-room-${testId}`, signalingAdapter, rtcConfiguration)
+    localPeer = new Peer({ peerId: 'local-peer' })
     parentRef = {
       send: vi.fn()
     }

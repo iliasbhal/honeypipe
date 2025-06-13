@@ -8,10 +8,14 @@ describe('Room Integration', () => {
   let signalingAdapter: InMemorySignalingAdapter
   let peer1: Peer
   let peer2: Peer
+  let rtcConfiguration: RTCConfiguration
 
   beforeEach(() => {
     signalingAdapter = new InMemorySignalingAdapter()
-    room = new Room('test-room', signalingAdapter)
+    rtcConfiguration = {
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    }
+    room = new Room('test-room', signalingAdapter, rtcConfiguration)
     peer1 = new Peer({ peerId: 'alice' })
     peer2 = new Peer({ peerId: 'bob' })
   })
@@ -84,5 +88,20 @@ describe('Room Integration', () => {
     room.stop()
     expect(room.getPeerCount()).toBe(0)
     expect(room.isRoomActive()).toBe(false)
+  })
+
+  it('should use the provided rtcConfiguration', () => {
+    expect(room.rtcConfiguration).toBe(rtcConfiguration)
+    expect(room.rtcConfiguration.iceServers).toEqual([{ urls: 'stun:stun.l.google.com:19302' }])
+  })
+
+  it('should use default rtcConfiguration when none provided', () => {
+    const roomWithDefaults = new Room('default-room', signalingAdapter)
+    expect(roomWithDefaults.rtcConfiguration).toBeDefined()
+    expect(roomWithDefaults.rtcConfiguration.iceServers).toEqual([
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" }
+    ])
+    expect(roomWithDefaults.rtcConfiguration.iceCandidatePoolSize).toBe(10)
   })
 });

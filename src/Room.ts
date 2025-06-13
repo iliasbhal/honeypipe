@@ -4,12 +4,22 @@ import { Peer } from './Peer';
 export class Room {
   id: string;
   signalingAdapter: InMemorySignalingAdapter;
+  rtcConfiguration: RTCConfiguration;
   private connectedPeers: Map<string, Peer> = new Map();
   private isActive: boolean = true;
 
-  constructor(id: string, signalingAdapter: InMemorySignalingAdapter) {
+  constructor(id: string, signalingAdapter: InMemorySignalingAdapter, rtcConfiguration?: RTCConfiguration) {
     this.id = id;
     this.signalingAdapter = signalingAdapter;
+    this.rtcConfiguration = rtcConfiguration || {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
+      ],
+      iceCandidatePoolSize: 10,
+      bundlePolicy: 'balanced' as RTCBundlePolicy,
+      rtcpMuxPolicy: 'require' as RTCRtcpMuxPolicy
+    };
   }
 
   /**

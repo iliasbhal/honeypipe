@@ -44,15 +44,7 @@ export class Peer {
       input: {
         room: room,
         localPeer: this,
-        rtcConfiguration: {
-          iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" }
-          ],
-          iceCandidatePoolSize: 10,
-          bundlePolicy: 'balanced' as RTCBundlePolicy,
-          rtcpMuxPolicy: 'require' as RTCRtcpMuxPolicy
-        },
+        rtcConfiguration: room.rtcConfiguration,
         parentRef: {
           send: (event: any) => {
             console.log(`[${this.peerId}] Room connection event:`, event);

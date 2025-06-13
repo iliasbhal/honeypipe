@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createActor } from 'xstate'
-import { ChannelPeerConnectionMachine } from './ChannelPeerConnectionMachine'
+import { HoneyPeerConnection } from './HoneyPeerConnection'
 import { Channel } from '../Channel'
 import { Peer } from '../Peer'
 import { InMemorySignalingAdapter } from '../adapters/InMemorySignalingAdapter'
 import wrtc from 'wrtc'
 
-describe('ChannelPeerConnectionMachine', () => {
+describe('HoneyPeerConnection', () => {
   let channel: Channel<any>
   let localPeer: Peer
   let signalingAdapter: InMemorySignalingAdapter
@@ -33,7 +33,7 @@ describe('ChannelPeerConnectionMachine', () => {
   })
 
   it('should start in idle state', () => {
-    const actor = createActor(ChannelPeerConnectionMachine, {
+    const actor = createActor(HoneyPeerConnection, {
       input: {
         localPeer,
         remotePeerId: 'peer-b',
@@ -51,7 +51,7 @@ describe('ChannelPeerConnectionMachine', () => {
   })
 
   it('should transition through states when START event is sent', async () => {
-    const actor = createActor(ChannelPeerConnectionMachine, {
+    const actor = createActor(HoneyPeerConnection, {
       input: {
         localPeer,
         remotePeerId: 'peer-b',
@@ -75,7 +75,7 @@ describe('ChannelPeerConnectionMachine', () => {
   })
 
   it('should become initiator when local peer ID is lexicographically smaller', async () => {
-    const actor = createActor(ChannelPeerConnectionMachine, {
+    const actor = createActor(HoneyPeerConnection, {
       input: {
         localPeer, // 'peer-a'
         remotePeerId: 'peer-b',
@@ -99,7 +99,7 @@ describe('ChannelPeerConnectionMachine', () => {
 
   it('should become non-initiator when local peer ID is lexicographically larger', async () => {
     const largePeer = new Peer({ peerId: 'peer-z' })
-    const actor = createActor(ChannelPeerConnectionMachine, {
+    const actor = createActor(HoneyPeerConnection, {
       input: {
         localPeer: largePeer, // 'peer-z'
         remotePeerId: 'peer-a',
@@ -123,7 +123,7 @@ describe('ChannelPeerConnectionMachine', () => {
   it('should handle incoming offer and transition to processing', async () => {
     const largePeer = new Peer({ peerId: 'peer-z' }) // This would normally not be initiator
 
-    const actor = createActor(ChannelPeerConnectionMachine, {
+    const actor = createActor(HoneyPeerConnection, {
       input: {
         localPeer: largePeer,
         remotePeerId: 'peer-a',
@@ -171,7 +171,7 @@ describe('ChannelPeerConnectionMachine', () => {
   it('should send offer when initiating', async () => {
     const pushSpy = vi.spyOn(signalingAdapter, 'push')
 
-    const actor = createActor(ChannelPeerConnectionMachine, {
+    const actor = createActor(HoneyPeerConnection, {
       input: {
         localPeer,
         remotePeerId: 'peer-b',
@@ -198,7 +198,7 @@ describe('ChannelPeerConnectionMachine', () => {
     const pushSpy = vi.spyOn(signalingAdapter, 'push')
     const largePeer = new Peer({ peerId: 'peer-z' })
 
-    const actor = createActor(ChannelPeerConnectionMachine, {
+    const actor = createActor(HoneyPeerConnection, {
       input: {
         localPeer: largePeer, // Non-initiator
         remotePeerId: 'peer-a',
@@ -249,7 +249,7 @@ describe('ChannelPeerConnectionMachine', () => {
   })
 
   it('should transition to connected when answer is received', async () => {
-    const actor = createActor(ChannelPeerConnectionMachine, {
+    const actor = createActor(HoneyPeerConnection, {
       input: {
         localPeer,
         remotePeerId: 'peer-b',
@@ -284,7 +284,7 @@ describe('ChannelPeerConnectionMachine', () => {
   it('should send ICE candidates', async () => {
     const pushSpy = vi.spyOn(signalingAdapter, 'push')
 
-    const actor = createActor(ChannelPeerConnectionMachine, {
+    const actor = createActor(HoneyPeerConnection, {
       input: {
         localPeer,
         remotePeerId: 'peer-b',
@@ -314,7 +314,7 @@ describe('ChannelPeerConnectionMachine', () => {
   })
 
   it('should notify parent when connection is established', async () => {
-    const actor = createActor(ChannelPeerConnectionMachine, {
+    const actor = createActor(HoneyPeerConnection, {
       input: {
         localPeer,
         remotePeerId: 'peer-b',
@@ -354,7 +354,7 @@ describe('ChannelPeerConnectionMachine', () => {
   })
 
   it('should handle send message delegation to actor', async () => {
-    const actor = createActor(ChannelPeerConnectionMachine, {
+    const actor = createActor(HoneyPeerConnection, {
       input: {
         localPeer,
         remotePeerId: 'peer-b',
@@ -402,7 +402,7 @@ describe('ChannelPeerConnectionMachine', () => {
   })
 
   it('should notify parent when message is received', async () => {
-    const actor = createActor(ChannelPeerConnectionMachine, {
+    const actor = createActor(HoneyPeerConnection, {
       input: {
         localPeer,
         remotePeerId: 'peer-b',
@@ -443,7 +443,7 @@ describe('ChannelPeerConnectionMachine', () => {
   })
 
   it('should cleanup resources when closed', async () => {
-    const actor = createActor(ChannelPeerConnectionMachine, {
+    const actor = createActor(HoneyPeerConnection, {
       input: {
         localPeer,
         remotePeerId: 'peer-b',

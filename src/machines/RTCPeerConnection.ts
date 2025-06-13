@@ -1,5 +1,5 @@
 import * as x from 'xstate';
-import { RTCDataChannelMachine } from './RTCDataChannelMachine';
+import { RTCDataChannelMachine } from './RTCDataChannel';
 
 interface RTCPeerConnectionContext {
   peerConnection: RTCPeerConnection;
@@ -81,10 +81,10 @@ export const RTCPeerConnectionMachine = x.setup({
     createDataChannel: x.assign({
       dataChannels: ({ context, event, spawn }) => {
         if (event.type !== 'CREATE_DATA_CHANNEL') return context.dataChannels;
-        
+
         const dataChannel = context.peerConnection.createDataChannel(event.label, event.options);
         const newDataChannels = new Map(context.dataChannels);
-        
+
         // Spawn RTCDataChannelMachine actor
         const dataChannelActor = spawn('rtcDataChannel', {
           id: `dataChannel-${event.label}`,
@@ -93,26 +93,26 @@ export const RTCPeerConnectionMachine = x.setup({
             parentRef: context.parentRef
           }
         });
-        
+
         newDataChannels.set(event.label, dataChannelActor);
-        
+
         // Notify parent about new data channel
         context.parentRef.send({
           type: 'RTC_DATA_CHANNEL_CREATED',
           label: event.label,
           dataChannel: dataChannel
         });
-        
+
         return newDataChannels;
       }
     }),
     handleIncomingDataChannel: x.assign({
       dataChannels: ({ context, event, spawn }) => {
         if (event.type !== 'DATA_CHANNEL_CREATED') return context.dataChannels;
-        
+
         const dataChannel = event.dataChannel;
         const newDataChannels = new Map(context.dataChannels);
-        
+
         // Spawn RTCDataChannelMachine for incoming data channel
         const dataChannelActor = spawn('rtcDataChannel', {
           id: `dataChannel-${dataChannel.label}`,
@@ -121,16 +121,16 @@ export const RTCPeerConnectionMachine = x.setup({
             parentRef: context.parentRef
           }
         });
-        
+
         newDataChannels.set(dataChannel.label, dataChannelActor);
-        
+
         // Notify parent about new data channel
         context.parentRef.send({
           type: 'RTC_DATA_CHANNEL_CREATED',
           label: dataChannel.label,
           dataChannel: dataChannel
         });
-        
+
         return newDataChannels;
       }
     }),
@@ -163,7 +163,7 @@ export const RTCPeerConnectionMachine = x.setup({
     },
     sendDataChannelMessage: ({ context, event }) => {
       if (event.type !== 'SEND_DATA_CHANNEL_MESSAGE') return;
-      
+
       const dataChannelActor = context.dataChannels.get(event.label);
       if (dataChannelActor) {
         dataChannelActor.send({
@@ -177,13 +177,13 @@ export const RTCPeerConnectionMachine = x.setup({
       context.dataChannels.forEach((dataChannelActor) => {
         dataChannelActor.send({ type: 'CLOSE' });
       });
-      
+
       // Clean up peer connection event listeners
       const pc = context.peerConnection;
       pc.onicecandidate = null;
       pc.onconnectionstatechange = null;
       pc.ondatachannel = null;
-      
+
       // Close peer connection
       if (pc.connectionState !== 'closed') {
         pc.close();

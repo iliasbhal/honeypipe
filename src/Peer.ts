@@ -1,5 +1,5 @@
 import { createActor, Actor } from 'xstate';
-import { WebRTCConnection } from './machines/WebRTCConnection';
+import { HoneyPeerConnection } from './machines/HoneyPeerConnection';
 import { Channel } from './Channel';
 
 export interface PeerOptions {
@@ -8,7 +8,7 @@ export interface PeerOptions {
 
 interface ChannelConnection<ChannelType = Channel<any>> {
   channel: ChannelType;
-  nachine: Actor<typeof WebRTCConnection>;
+  nachine: Actor<typeof HoneyPeerConnection>;
 }
 
 export class Peer {
@@ -40,10 +40,11 @@ export class Peer {
     }
 
     // Create state machine for this connection
-    const nachine = createActor(WebRTCConnection, {
+    const nachine = createActor(HoneyPeerConnection, {
       input: {
+        localPeer: this,
+        remotePeerId: 'placeholder', // This will be updated by the machine
         channel,
-        peer: this,
         rtcConfiguration: {
           iceServers: [
             { urls: "stun:stun.l.google.com:19302" },
@@ -53,6 +54,7 @@ export class Peer {
           bundlePolicy: 'balanced' as RTCBundlePolicy,
           rtcpMuxPolicy: 'require' as RTCRtcpMuxPolicy
         },
+        parentRef: { send: () => { } } // placeholder parent ref
       },
     });
 
@@ -81,7 +83,7 @@ export class Peer {
     }
 
     const messageStr = JSON.stringify(message);
-    connection.nachine.send({ type: 'SEND_MESSAGE', message: messageStr, origin: 'main' });
+    connection.nachine.send({ type: 'SEND_MESSAGE', message: messageStr });
   }
 
 
@@ -90,8 +92,8 @@ export class Peer {
     if (!connection) return 'new';
 
     const snapshot = connection.nachine.getSnapshot();
-    const peerConnection = snapshot.context.peerConnection;
-    return peerConnection?.connectionState || 'new';
+    const rtcPeerConnectionActorRef = snapshot.context.rtcPeerConnectionActorRef;
+    return rtcPeerConnectionActorRef ? 'connected' : 'new';
   }
 
   getIceConnectionState(channelId: string): string {
@@ -99,8 +101,8 @@ export class Peer {
     if (!connection) return 'new';
 
     const snapshot = connection.nachine.getSnapshot();
-    const peerConnection = snapshot.context.peerConnection;
-    return peerConnection?.iceConnectionState || 'new';
+    const rtcPeerConnectionActorRef = snapshot.context.rtcPeerConnectionActorRef;
+    return rtcPeerConnectionActorRef ? 'connected' : 'new';
   }
 
   getDataChannelState(channelId: string): string | undefined {
@@ -108,8 +110,8 @@ export class Peer {
     if (!connection) return 'new';
 
     const snapshot = connection.nachine.getSnapshot();
-    const dataChannel = snapshot.context.dataChannel;
-    return dataChannel?.readyState;
+    const rtcPeerConnectionActorRef = snapshot.context.rtcPeerConnectionActorRef;
+    return rtcPeerConnectionActorRef ? 'open' : 'closed';
   }
 
   getAllConnectionStates(): Record<string, { connectionState: string; iceConnectionState: string; dataChannelState?: string }> {
@@ -133,7 +135,7 @@ export class Peer {
       connection.channel.removePeer(this.peerId);
 
       // Send close connection event to state machine
-      connection.nachine.send({ type: 'CLOSE_CONNECTION', origin: 'main' });
+      connection.nachine.send({ type: 'CLOSE' });
 
       // Stop the state machine
       connection.nachine.stop();
@@ -156,7 +158,7 @@ export class Peer {
     channel.removePeer(this.peerId);
 
     // Send close connection event and wait for machine to reach final state
-    connection.nachine.send({ type: 'CLOSE_CONNECTION', origin: 'main' });
+    connection.nachine.send({ type: 'CLOSE' });
 
     // Wait for the state machine to properly close
     await new Promise<void>((resolve) => {

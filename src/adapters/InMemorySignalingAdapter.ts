@@ -1,16 +1,31 @@
 import Redis from 'ioredis-mock';
 
-export interface SignalingEvent {
+export type SignalingEvent = {
   peerId: string;
-  type: 'join' | 'sdp' | 'ice';
-  data?: {
-    sdp?: RTCSessionDescriptionInit;
-    iceCandidate?: RTCIceCandidateInit;
-  };
+  roomId: string;
+  type: 'join' | 'leave' | 'alive';
+} | {
+  peerId: string;
+  channelId: string;
+  type: 'sdpOffer' | 'sdpAnswer';
+  data: RTCSessionDescriptionInit;
+} | {
+  peerId: string;
+  channelId: string;
+  type: 'iceCandidate';
+  data: RTCIceCandidateInit;
+}
+
+type SignalPullRequest = {
+  roomId: string;
+  offsetIndex: number;
+} | {
+  channelId: string;
+  offsetIndex: number;
 }
 
 export class InMemorySignalingAdapter {
-  private redis: Redis;
+  private redis: InstanceType<typeof Redis>;
 
   constructor() {
     this.redis = new Redis();
@@ -19,32 +34,30 @@ export class InMemorySignalingAdapter {
   /**
    * Push an event to a channel timeline
    */
-  async push(channelId: string, event: SignalingEvent): Promise<number> {
-    const redisKey = `channel:${channelId}:timeline`;
+  async push(event: SignalingEvent): Promise<number> {
+    const redisKey = 'channelId' in event
+      ? `channel:${event.channelId}:timeline`
+      : `room:${event.roomId}:timeline`;
 
     // Push event to the end of the list and get the new length (which becomes the index)
     const newLength = await this.redis.rpush(redisKey, JSON.stringify(event));
-
-    console.log(`[InMemory] ${event.peerId} pushing ${event.type} event #${newLength} to channel ${channelId}`);
-
     return newLength;
   }
 
   /**
    * Pull all events from a channel timeline since a given offset
    */
-  async pull(channelId: string, offsetIndex: number = 0): Promise<SignalingEvent[]> {
-    const redisKey = `channel:${channelId}:timeline`;
+  async pull(request: SignalPullRequest): Promise<SignalingEvent[]> {
+    const redisKey = 'channelId' in request
+      ? `channel:${request.channelId}:timeline`
+      : `room:${request.roomId}:timeline`;
 
     // Get events from the list (in reverse order since lpush puts newest first)
+    const offsetIndex = request.offsetIndex || 0;
     const eventStrings = await this.redis.lrange(redisKey, offsetIndex, -1);
 
     const events: SignalingEvent[] = eventStrings
-      .map((str: string) => JSON.parse(str) as SignalingEvent)
-
-    if (events.length > 0) {
-      console.log(`[InMemory] Pulled ${events.length} events from channel ${channelId} since index ${offsetIndex}`);
-    }
+      .map((str: string) => JSON.parse(str) as SignalingEvent);
 
     return events;
   }

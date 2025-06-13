@@ -2,7 +2,7 @@ import * as x from 'xstate';
 import { Channel } from '../Channel';
 import { Peer } from '../Peer';
 
-interface ChannelPresenceSignalContext {
+interface HoneyPresenceSignalContext {
   channel: Channel<any>;
   peer: Peer;
   lastSeenIndex: number;
@@ -12,7 +12,7 @@ interface ChannelPresenceSignalContext {
   pollCount: number;
 }
 
-interface ChannelPresenceSignalInput {
+interface HoneyPresenceSignalInput {
   channel: Channel<any>;
   peer: Peer;
   parentRef: any;
@@ -24,22 +24,25 @@ export type PresenceEvent =
   | { type: 'leave'; peerId: string }
   | { type: 'alive'; peerId: string };
 
-export const ChannelPresenceSignalMachine = x.setup({
+export const HoneyPresenceSignal = x.setup({
   types: {
-    context: {} as ChannelPresenceSignalContext,
+    context: {} as HoneyPresenceSignalContext,
     events: {} as any,
-    input: {} as ChannelPresenceSignalInput,
+    input: {} as HoneyPresenceSignalInput,
   },
   delays: {
     ALIVE_INTERVAL: ({ context }) => context.aliveInterval,
     POLLING_INTERVAL: ({ context }) => context.currentPollingDelay,
   },
   actors: {
-    presencePolling: x.fromPromise(async ({ input }: { input: ChannelPresenceSignalContext }) => {
+    presencePolling: x.fromPromise(async ({ input }: { input: HoneyPresenceSignalContext }) => {
       const { channel, lastSeenIndex } = input;
 
       // Pull only presence events from signaling adapter
-      const allEvents = await channel.signalingAdapter.pull(channel.id, lastSeenIndex);
+      const allEvents = await channel.signalingAdapter.pull({
+        roomId: channel.id,
+        offsetIndex: lastSeenIndex
+      });
 
       // Filter only presence events (join, leave, alive)
       const presenceEvents = allEvents.filter(event =>
@@ -54,26 +57,29 @@ export const ChannelPresenceSignalMachine = x.setup({
   },
   actions: {
     sendJoinEvent: async ({ context }) => {
-      await context.channel.signalingAdapter.push(context.channel.id, {
+      await context.channel.signalingAdapter.push({
         peerId: context.peer.id,
+        roomId: context.channel.id,
         type: 'join'
       });
     },
     sendLeaveEvent: async ({ context }) => {
-      await context.channel.signalingAdapter.push(context.channel.id, {
+      await context.channel.signalingAdapter.push({
         peerId: context.peer.id,
+        roomId: context.channel.id,
         type: 'leave'
       });
     },
     sendAliveEvent: async ({ context }) => {
-      await context.channel.signalingAdapter.push(context.channel.id, {
+      await context.channel.signalingAdapter.push({
         peerId: context.peer.id,
+        roomId: context.channel.id,
         type: 'alive'
       });
     },
   },
 }).createMachine({
-  id: 'channelPresenceSignal',
+  id: 'honeyPresenceSignal',
   initial: 'inactive',
   context: ({ input }) => ({
     channel: input.channel,

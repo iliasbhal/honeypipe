@@ -2,9 +2,9 @@ import * as x from 'xstate';
 import { Channel } from '../Channel';
 import { Peer } from '../Peer';
 import { SignalingEvent } from '../adapters/InMemorySignalingAdapter';
-import { RTCPeerConnectionMachine } from './RTCPeerConnectionMachine';
+import { RTCPeerConnectionMachine } from './RTCPeerConnection';
 
-interface ChannelPeerConnectionContext {
+interface HoneyPeerConnectionContext {
   localPeer: Peer;
   remotePeerId: string;
   channel: Channel<any>;
@@ -15,7 +15,7 @@ interface ChannelPeerConnectionContext {
   parentRef: any;
 }
 
-interface ChannelPeerConnectionInput {
+interface HoneyPeerConnectionInput {
   localPeer: Peer;
   remotePeerId: string;
   channel: Channel<any>;
@@ -41,11 +41,11 @@ export type PeerConnectionEvent =
   | { type: 'DATA_CHANNEL_CLOSED'; label: string }
   | { type: 'DATA_CHANNEL_ERROR'; label: string; error: any };
 
-export const ChannelPeerConnectionMachine = x.setup({
+export const HoneyPeerConnection = x.setup({
   types: {
-    context: {} as ChannelPeerConnectionContext,
+    context: {} as HoneyPeerConnectionContext,
     events: {} as PeerConnectionEvent,
-    input: {} as ChannelPeerConnectionInput,
+    input: {} as HoneyPeerConnectionInput,
   },
   actors: {
     rtcPeerConnection: RTCPeerConnectionMachine,
@@ -126,7 +126,8 @@ export const ChannelPeerConnectionMachine = x.setup({
     }),
     sendOffer: async ({ context, event }) => {
       if (event.type === 'RTC_OFFER_CREATED') {
-        await context.channel.signalingAdapter.push(context.channel.id, {
+        await context.channel.signalingAdapter.push({
+          channelId: context.channel.id,
           peerId: context.localPeer.id,
           type: 'sdpOffer',
           data: event.offer,
@@ -135,7 +136,8 @@ export const ChannelPeerConnectionMachine = x.setup({
     },
     sendAnswer: async ({ context, event }) => {
       if (event.type === 'RTC_ANSWER_CREATED') {
-        await context.channel.signalingAdapter.push(context.channel.id, {
+        await context.channel.signalingAdapter.push({
+          channelId: context.channel.id,
           peerId: context.localPeer.id,
           type: 'sdpAnswer',
           data: event.answer,
@@ -144,7 +146,8 @@ export const ChannelPeerConnectionMachine = x.setup({
     },
     sendIceCandidate: async ({ context, event }) => {
       if (event.type === 'RTC_ICE_CANDIDATE' && event.candidate) {
-        await context.channel.signalingAdapter.push(context.channel.id, {
+        await context.channel.signalingAdapter.push({
+          channelId: context.channel.id,
           peerId: context.localPeer.id,
           type: 'iceCandidate',
           data: event.candidate,
@@ -204,7 +207,7 @@ export const ChannelPeerConnectionMachine = x.setup({
     },
   },
 }).createMachine({
-  id: 'channelPeerConnection',
+  id: 'honeyPeerConnection',
   initial: 'idle',
   context: ({ input }) => ({
     localPeer: input.localPeer,

@@ -1,12 +1,16 @@
 import { InMemorySignalingAdapter } from './adapters/InMemorySignalingAdapter';
 import { Peer } from './Peer';
 
+/**
+ * Channel represents a peer-to-peer communication channel between exactly two peers.
+ * It handles SDP/ICE signaling and message passing for WebRTC connections.
+ */
 export class Channel<MessageType> {
   __type!: MessageType;
-  id: string;
+  id: string; // Format: "peerId1-peerId2" (alphabetically sorted)
   signalingAdapter: InMemorySignalingAdapter;
   private messageHandlers: Set<(message: MessageType) => void> = new Set();
-  private connectedPeers: Map<string, Peer> = new Map();
+  private connectedPeers: Map<string, Peer> = new Map(); // Should only have 2 peers max
   private isActive: boolean = true;
 
   constructor(id: string, signalingAdapter: InMemorySignalingAdapter) {

@@ -1,9 +1,9 @@
 import * as x from 'xstate';
-import { Channel } from '../Channel';
+import { Room } from '../Room';
 import { Peer } from '../Peer';
 
 interface HoneyPresenceSignalContext {
-  channel: Channel<any>;
+  room: Room; // Room for presence signaling (join/leave/alive)
   peer: Peer;
   lastSeenIndex: number;
   currentPollingDelay: number;
@@ -13,7 +13,7 @@ interface HoneyPresenceSignalContext {
 }
 
 interface HoneyPresenceSignalInput {
-  channel: Channel<any>;
+  room: Room; // Room for presence signaling (join/leave/alive)
   peer: Peer;
   parentRef: any;
   aliveInterval?: number; // milliseconds between alive signals, default 30000 (30s)
@@ -36,11 +36,11 @@ export const HoneyPresenceSignal = x.setup({
   },
   actors: {
     presencePolling: x.fromPromise(async ({ input }: { input: HoneyPresenceSignalContext }) => {
-      const { channel, lastSeenIndex } = input;
+      const { room, lastSeenIndex } = input;
 
       // Pull only presence events from signaling adapter
-      const allEvents = await channel.signalingAdapter.pull({
-        roomId: channel.id,
+      const allEvents = await room.signalingAdapter.pull({
+        roomId: room.id,
         offsetIndex: lastSeenIndex
       });
 
@@ -57,23 +57,23 @@ export const HoneyPresenceSignal = x.setup({
   },
   actions: {
     sendJoinEvent: async ({ context }) => {
-      await context.channel.signalingAdapter.push({
+      await context.room.signalingAdapter.push({
         peerId: context.peer.id,
-        roomId: context.channel.id,
+        roomId: context.room.id,
         type: 'join'
       });
     },
     sendLeaveEvent: async ({ context }) => {
-      await context.channel.signalingAdapter.push({
+      await context.room.signalingAdapter.push({
         peerId: context.peer.id,
-        roomId: context.channel.id,
+        roomId: context.room.id,
         type: 'leave'
       });
     },
     sendAliveEvent: async ({ context }) => {
-      await context.channel.signalingAdapter.push({
+      await context.room.signalingAdapter.push({
         peerId: context.peer.id,
-        roomId: context.channel.id,
+        roomId: context.room.id,
         type: 'alive'
       });
     },
@@ -82,7 +82,7 @@ export const HoneyPresenceSignal = x.setup({
   id: 'honeyPresenceSignal',
   initial: 'inactive',
   context: ({ input }) => ({
-    channel: input.channel,
+    room: input.room,
     peer: input.peer,
     lastSeenIndex: 0,
     currentPollingDelay: 1000, // Start with 1s polling for presence

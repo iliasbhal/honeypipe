@@ -1,22 +1,22 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { createActor } from 'xstate'
 import { HoneyPresenceSignal } from './HoneyPresenceSignal'
-import { Channel } from '../Channel'
+import { Room } from '../Room'
 import { Peer } from '../Peer'
 import { InMemorySignalingAdapter } from '../adapters/InMemorySignalingAdapter'
 
 describe('HoneyPresenceSignal', () => {
-  let channel: Channel<any>
+  let room: Room
   let peer: Peer
   let signalingAdapter: InMemorySignalingAdapter
   let parentRef: any
   let testId: number = 0
 
   beforeEach(() => {
-    // Create fresh instances for each test with unique channel ID
+    // Create fresh instances for each test with unique room ID
     testId++
     signalingAdapter = new InMemorySignalingAdapter()
-    channel = new Channel(`test-channel-${testId}`, signalingAdapter)
+    room = new Room(`test-room-${testId}`, signalingAdapter)
     peer = new Peer({ peerId: 'test-peer-1' })
     parentRef = {
       send: vi.fn()
@@ -31,7 +31,7 @@ describe('HoneyPresenceSignal', () => {
   it('should start in inactive state', () => {
     const actor = createActor(HoneyPresenceSignal, {
       input: {
-        channel,
+        room,
         peer,
         parentRef
       }
@@ -39,7 +39,7 @@ describe('HoneyPresenceSignal', () => {
 
     const snapshot = actor.getSnapshot()
     expect(snapshot.value).toBe('inactive')
-    expect(snapshot.context.channel).toBe(channel)
+    expect(snapshot.context.room).toBe(room)
     expect(snapshot.context.peer).toBe(peer)
     expect(snapshot.context.aliveInterval).toBe(30000) // Default 30s
   })
@@ -47,7 +47,7 @@ describe('HoneyPresenceSignal', () => {
   it('should use custom alive interval when provided', () => {
     const actor = createActor(HoneyPresenceSignal, {
       input: {
-        channel,
+        room,
         peer,
         parentRef,
         aliveInterval: 60000 // 60s
@@ -63,7 +63,7 @@ describe('HoneyPresenceSignal', () => {
 
     const actor = createActor(HoneyPresenceSignal, {
       input: {
-        channel,
+        room,
         peer,
         parentRef
       }
@@ -89,7 +89,7 @@ describe('HoneyPresenceSignal', () => {
     // Should send join event
     expect(pushSpy).toHaveBeenCalledWith({
       peerId: 'test-peer-1',
-      roomId: channel.id,
+      roomId: room.id,
       type: 'join'
     })
   })
@@ -99,7 +99,7 @@ describe('HoneyPresenceSignal', () => {
 
     const actor = createActor(HoneyPresenceSignal, {
       input: {
-        channel,
+        room,
         peer,
         parentRef
       }
@@ -126,7 +126,7 @@ describe('HoneyPresenceSignal', () => {
     // Should send leave event
     expect(pushSpy).toHaveBeenCalledWith({
       peerId: 'test-peer-1',
-      roomId: channel.id,
+      roomId: room.id,
       type: 'leave'
     })
   })
@@ -137,7 +137,7 @@ describe('HoneyPresenceSignal', () => {
 
     const actor = createActor(HoneyPresenceSignal, {
       input: {
-        channel,
+        room,
         peer,
         parentRef,
         aliveInterval: 1000 // 1s for testing
@@ -157,7 +157,7 @@ describe('HoneyPresenceSignal', () => {
     // Should have sent alive event
     expect(pushSpy).toHaveBeenCalledWith({
       peerId: 'test-peer-1',
-      roomId: channel.id,
+      roomId: room.id,
       type: 'alive'
     })
 
@@ -168,7 +168,7 @@ describe('HoneyPresenceSignal', () => {
     // Should have sent another alive event
     expect(pushSpy).toHaveBeenCalledWith({
       peerId: 'test-peer-1',
-      roomId: channel.id,
+      roomId: room.id,
       type: 'alive'
     })
 
@@ -177,14 +177,14 @@ describe('HoneyPresenceSignal', () => {
 
   it('should poll for presence events and notify parent', async () => {
     // Add some test events to the signaling adapter
-    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: channel.id, type: 'join' })
-    await signalingAdapter.push({ peerId: 'test-peer-3', roomId: channel.id, type: 'join' })
-    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: channel.id, type: 'leave' })
-    await signalingAdapter.push({ peerId: 'test-peer-4', roomId: channel.id, type: 'alive' })
+    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: room.id, type: 'join' })
+    await signalingAdapter.push({ peerId: 'test-peer-3', roomId: room.id, type: 'join' })
+    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: room.id, type: 'leave' })
+    await signalingAdapter.push({ peerId: 'test-peer-4', roomId: room.id, type: 'alive' })
 
     const actor = createActor(HoneyPresenceSignal, {
       input: {
-        channel,
+        room,
         peer,
         parentRef
       }
@@ -201,11 +201,11 @@ describe('HoneyPresenceSignal', () => {
       type: 'PRESENCE_EVENTS',
       data: {
         events: [
-          { peerId: 'test-peer-2', roomId: channel.id, type: 'join' },
-          { peerId: 'test-peer-3', roomId: channel.id, type: 'join' },
-          { peerId: 'test-peer-2', roomId: channel.id, type: 'leave' },
-          { peerId: 'test-peer-4', roomId: channel.id, type: 'alive' },
-          { peerId: 'test-peer-1', roomId: channel.id, type: 'join' } // Our actor's join event
+          { peerId: 'test-peer-2', roomId: room.id, type: 'join' },
+          { peerId: 'test-peer-3', roomId: room.id, type: 'join' },
+          { peerId: 'test-peer-2', roomId: room.id, type: 'leave' },
+          { peerId: 'test-peer-4', roomId: room.id, type: 'alive' },
+          { peerId: 'test-peer-1', roomId: room.id, type: 'join' } // Our actor's join event
         ],
         newLastSeenIndex: 5
       },
@@ -217,24 +217,24 @@ describe('HoneyPresenceSignal', () => {
 
   it('should filter out non-presence events when polling', async () => {
     // Add mixed events to the signaling adapter
-    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: channel.id, type: 'join' })
+    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: room.id, type: 'join' })
     await signalingAdapter.push({
       peerId: 'test-peer-2',
-      channelId: channel.id,
+      channelId: 'some-channel-id',
       type: 'sdpOffer',
       data: { type: 'offer', sdp: 'mock' }
     })
     await signalingAdapter.push({
       peerId: 'test-peer-2',
-      channelId: channel.id,
+      channelId: 'some-channel-id',
       type: 'iceCandidate',
       data: { candidate: '', sdpMLineIndex: 0, sdpMid: '' }
     })
-    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: channel.id, type: 'leave' })
+    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: room.id, type: 'leave' })
 
     const actor = createActor(HoneyPresenceSignal, {
       input: {
-        channel,
+        room,
         peer,
         parentRef
       }
@@ -251,9 +251,9 @@ describe('HoneyPresenceSignal', () => {
       type: 'PRESENCE_EVENTS',
       data: {
         events: [
-          { peerId: 'test-peer-2', roomId: channel.id, type: 'join' },
-          { peerId: 'test-peer-2', roomId: channel.id, type: 'leave' },
-          { peerId: 'test-peer-1', roomId: channel.id, type: 'join' } // Our actor's join event
+          { peerId: 'test-peer-2', roomId: room.id, type: 'join' },
+          { peerId: 'test-peer-2', roomId: room.id, type: 'leave' },
+          { peerId: 'test-peer-1', roomId: room.id, type: 'join' } // Our actor's join event
         ],
         newLastSeenIndex: 3 // Only presence events: join, leave, our join
       },
@@ -268,7 +268,7 @@ describe('HoneyPresenceSignal', () => {
 
     const actor = createActor(HoneyPresenceSignal, {
       input: {
-        channel,
+        room,
         peer,
         parentRef
       }
@@ -291,7 +291,7 @@ describe('HoneyPresenceSignal', () => {
 
     expect(pushSpy).toHaveBeenCalledWith({
       peerId: 'test-peer-1',
-      roomId: channel.id,
+      roomId: room.id,
       type: 'alive'
     })
 
@@ -301,14 +301,14 @@ describe('HoneyPresenceSignal', () => {
   it('should use exponential backoff for polling delay when no events', async () => {
     vi.useFakeTimers()
 
-    // Create a separate adapter and channel for this test to avoid interference
+    // Create a separate adapter and room for this test to avoid interference
     const testAdapter = new InMemorySignalingAdapter()
-    const testChannel = new Channel(`test-backoff-${Date.now()}`, testAdapter)
+    const testRoom = new Room(`test-backoff-${Date.now()}`, testAdapter)
     const pullSpy = vi.spyOn(testAdapter, 'pull')
 
     const actor = createActor(HoneyPresenceSignal, {
       input: {
-        channel: testChannel,
+        room: testRoom,
         peer,
         parentRef,
         aliveInterval: 60000 // Long alive interval to avoid interference
@@ -339,7 +339,7 @@ describe('HoneyPresenceSignal', () => {
 
     const actor = createActor(HoneyPresenceSignal, {
       input: {
-        channel,
+        room,
         peer,
         parentRef
       }
@@ -354,7 +354,7 @@ describe('HoneyPresenceSignal', () => {
     await vi.advanceTimersByTimeAsync(2250)
 
     // Add a presence event
-    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: channel.id, type: 'join' })
+    await signalingAdapter.push({ peerId: 'test-peer-2', roomId: room.id, type: 'join' })
 
     // Next poll should find the event and reset delay to base (1s)
     pullSpy.mockClear()
@@ -379,7 +379,7 @@ describe('HoneyPresenceSignal', () => {
 
     const actor = createActor(HoneyPresenceSignal, {
       input: {
-        channel,
+        room,
         peer,
         parentRef,
         aliveInterval: 1000
@@ -399,7 +399,7 @@ describe('HoneyPresenceSignal', () => {
     // Should have sent alive event
     expect(pushSpy).toHaveBeenCalledWith({
       peerId: 'test-peer-1',
-      roomId: channel.id,
+      roomId: room.id,
       type: 'alive'
     })
 

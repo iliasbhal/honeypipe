@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { createActor } from 'xstate'
 import { HoneyRoomConnection } from './HoneyRoomConnection'
-import { Channel } from '../Channel'
+import { Room } from '../Room'
 import { Peer } from '../Peer'
 import { InMemorySignalingAdapter } from '../adapters/InMemorySignalingAdapter'
 import wrtc from 'wrtc'
 
 describe('HoneyRoomConnection', () => {
-  let room: Channel<any>
+  let room: Room
   let localPeer: Peer
   let signalingAdapter: InMemorySignalingAdapter
   let rtcConfiguration: RTCConfiguration
@@ -17,7 +17,7 @@ describe('HoneyRoomConnection', () => {
   beforeEach(() => {
     testId++
     signalingAdapter = new InMemorySignalingAdapter()
-    room = new Channel(`test-room-${testId}`, signalingAdapter)
+    room = new Room(`test-room-${testId}`, signalingAdapter)
     localPeer = new Peer({ peerId: 'local-peer' })
     rtcConfiguration = {
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]

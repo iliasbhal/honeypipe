@@ -1,21 +1,21 @@
 import { createActor, Actor } from 'xstate';
-import { HoneyPeerConnection } from './machines/HoneyPeerConnection';
-import { Channel } from './Channel';
+import { HoneyRoomConnection } from './machines/HoneyRoomConnection';
+import { Room } from './Room';
 
 export interface PeerOptions {
   peerId: string;
 }
 
-interface ChannelConnection<ChannelType = Channel<any>> {
-  channel: ChannelType;
-  nachine: Actor<typeof HoneyPeerConnection>;
+interface RoomConnection {
+  room: Room;
+  roomConnectionActor: Actor<typeof HoneyRoomConnection>;
 }
 
 export class Peer {
-  static Channel = Channel;
+  static Room = Room;
 
   peerId: string;
-  connections: Map<string, ChannelConnection<any>> = new Map(); // channelId -> connection
+  roomConnections: Map<string, RoomConnection> = new Map(); // roomId -> room connection
 
   constructor(options: PeerOptions) {
     this.peerId = options.peerId;
@@ -25,26 +25,25 @@ export class Peer {
     return this.peerId;
   }
 
-  async connect<C extends Channel<any>>(channel: C): Promise<void> {
-    console.log(`[${this.peerId}] Connecting to channel ${channel.id}...`);
+  async joinRoom(room: Room): Promise<void> {
+    console.log(`[${this.peerId}] Joining room ${room.id}...`);
 
-    // Check if channel is active
-    if (!channel.isChannelActive()) {
-      throw new Error(`Cannot connect to stopped channel ${channel.id}`);
+    // Check if room is active
+    if (!room.isRoomActive()) {
+      throw new Error(`Cannot join stopped room ${room.id}`);
     }
 
-    // Check if already connected to this channel
-    if (this.connections.has(channel.id)) {
-      console.log(`[${this.peerId}] Already connected to channel ${channel.id}`);
+    // Check if already connected to this room
+    if (this.roomConnections.has(room.id)) {
+      console.log(`[${this.peerId}] Already connected to room ${room.id}`);
       return;
     }
 
-    // Create state machine for this connection
-    const nachine = createActor(HoneyPeerConnection, {
+    // Create room connection actor
+    const roomConnectionActor = createActor(HoneyRoomConnection, {
       input: {
+        room: room,
         localPeer: this,
-        remotePeerId: 'placeholder', // This will be updated by the machine
-        channel,
         rtcConfiguration: {
           iceServers: [
             { urls: "stun:stun.l.google.com:19302" },
@@ -54,118 +53,54 @@ export class Peer {
           bundlePolicy: 'balanced' as RTCBundlePolicy,
           rtcpMuxPolicy: 'require' as RTCRtcpMuxPolicy
         },
-        parentRef: { send: () => { } } // placeholder parent ref
+        parentRef: {
+          send: (event: any) => {
+            console.log(`[${this.peerId}] Room connection event:`, event);
+            // Handle room connection events here
+          }
+        }
       },
     });
 
-    // Store connection
-    this.connections.set(channel.id, {
-      channel,
-      nachine
+    // Store room connection
+    this.roomConnections.set(room.id, {
+      room,
+      roomConnectionActor
     });
 
-    // Add this peer to the channel's peer list
-    channel.addPeer(this);
+    // Add this peer to the room's peer list
+    room.addPeer(this);
 
-    // Start the state machine - it handles everything including polling
-    nachine.start();
+    // Start the room connection actor
+    roomConnectionActor.start();
+    
+    // Join the room
+    roomConnectionActor.send({ type: 'JOIN_ROOM' });
 
-    console.log(`[${this.peerId}] Started connection to channel ${channel.id}`);
+    console.log(`[${this.peerId}] Started connection to room ${room.id}`);
   }
 
-
-
-  send<C extends Channel<any>>(channel: C, message: C['__type']): void {
-    const connection = this.connections.get(channel.id);
-    if (!connection) {
-      console.warn(`[${this.peerId}] No connection found for channel ${channel.id}`);
+  async leaveRoom(room: Room): Promise<void> {
+    const roomConnection = this.roomConnections.get(room.id);
+    if (!roomConnection) {
+      console.warn(`[${this.peerId}] Not connected to room ${room.id}`);
       return;
     }
 
-    const messageStr = JSON.stringify(message);
-    connection.nachine.send({ type: 'SEND_MESSAGE', message: messageStr });
-  }
+    console.log(`[${this.peerId}] Leaving room ${room.id}`);
 
+    // Remove this peer from the room
+    room.removePeer(this.peerId);
 
-  getConnectionState(channelId: string): string {
-    const connection = this.connections.get(channelId);
-    if (!connection) return 'new';
-
-    const snapshot = connection.nachine.getSnapshot();
-    const rtcPeerConnectionActorRef = snapshot.context.rtcPeerConnectionActorRef;
-    return rtcPeerConnectionActorRef ? 'connected' : 'new';
-  }
-
-  getIceConnectionState(channelId: string): string {
-    const connection = this.connections.get(channelId);
-    if (!connection) return 'new';
-
-    const snapshot = connection.nachine.getSnapshot();
-    const rtcPeerConnectionActorRef = snapshot.context.rtcPeerConnectionActorRef;
-    return rtcPeerConnectionActorRef ? 'connected' : 'new';
-  }
-
-  getDataChannelState(channelId: string): string | undefined {
-    const connection = this.connections.get(channelId);
-    if (!connection) return 'new';
-
-    const snapshot = connection.nachine.getSnapshot();
-    const rtcPeerConnectionActorRef = snapshot.context.rtcPeerConnectionActorRef;
-    return rtcPeerConnectionActorRef ? 'open' : 'closed';
-  }
-
-  getAllConnectionStates(): Record<string, { connectionState: string; iceConnectionState: string; dataChannelState?: string }> {
-    const states: Record<string, any> = {};
-    this.connections.forEach((connection, channelId) => {
-      states[channelId] = {
-        connectionState: this.getConnectionState(channelId),
-        iceConnectionState: this.getIceConnectionState(channelId),
-        dataChannelState: this.getDataChannelState(channelId),
-        eventHistory: connection.nachine.getSnapshot().context.eventHistory,
-      };
-    });
-    return states;
-  }
-
-  async close(): Promise<void> {
-    console.log(`[${this.peerId}] Closing all connections`);
-
-    this.connections.forEach((connection) => {
-      // Remove this peer from the channel
-      connection.channel.removePeer(this.peerId);
-
-      // Send close connection event to state machine
-      connection.nachine.send({ type: 'CLOSE' });
-
-      // Stop the state machine
-      connection.nachine.stop();
-    });
-
-    this.connections.clear();
-  }
-
-  // Disconnect from a specific channel
-  async disconnect<C extends Channel<any>>(channel: C): Promise<void> {
-    const connection = this.connections.get(channel.id);
-    if (!connection) {
-      console.warn(`[${this.peerId}] Not connected to channel ${channel.id}`);
-      return;
-    }
-
-    console.log(`[${this.peerId}] Disconnecting from channel ${channel.id}`);
-
-    // Remove this peer from the channel
-    channel.removePeer(this.peerId);
-
-    // Send close connection event and wait for machine to reach final state
-    connection.nachine.send({ type: 'CLOSE' });
+    // Send leave room event and wait for machine to reach final state
+    roomConnection.roomConnectionActor.send({ type: 'LEAVE_ROOM' });
 
     // Wait for the state machine to properly close
     await new Promise<void>((resolve) => {
-      const subscription = connection.nachine.subscribe((state) => {
-        if (state.status === 'done') {
+      const subscription = roomConnection.roomConnectionActor.subscribe((state) => {
+        if (state.value === 'disconnected') {
           subscription.unsubscribe();
-          this.connections.delete(channel.id);
+          this.roomConnections.delete(room.id);
           resolve();
         }
       });
@@ -173,12 +108,86 @@ export class Peer {
       // Fallback timeout
       setTimeout(() => {
         subscription.unsubscribe();
-        connection.nachine.stop();
-        this.connections.delete(channel.id);
+        roomConnection.roomConnectionActor.stop();
+        this.roomConnections.delete(room.id);
         resolve();
       }, 1000);
     });
 
-    console.log(`[${this.peerId}] Disconnected from channel ${channel.id}`);
+    console.log(`[${this.peerId}] Left room ${room.id}`);
+  }
+
+  sendMessageToPeer(roomId: string, peerId: string, message: string): void {
+    const roomConnection = this.roomConnections.get(roomId);
+    if (!roomConnection) {
+      console.warn(`[${this.peerId}] No connection found for room ${roomId}`);
+      return;
+    }
+
+    roomConnection.roomConnectionActor.send({
+      type: 'SEND_MESSAGE_TO_PEER',
+      peerId: peerId,
+      message: message
+    });
+  }
+
+  sendMessageToAll(roomId: string, message: string): void {
+    const roomConnection = this.roomConnections.get(roomId);
+    if (!roomConnection) {
+      console.warn(`[${this.peerId}] No connection found for room ${roomId}`);
+      return;
+    }
+
+    roomConnection.roomConnectionActor.send({
+      type: 'SEND_MESSAGE_TO_ALL',
+      message: message
+    });
+  }
+
+  sendMessageToDataChannel(roomId: string, peerId: string, label: string, message: string): void {
+    const roomConnection = this.roomConnections.get(roomId);
+    if (!roomConnection) {
+      console.warn(`[${this.peerId}] No connection found for room ${roomId}`);
+      return;
+    }
+
+    roomConnection.roomConnectionActor.send({
+      type: 'SEND_MESSAGE_TO_DATACHANNEL',
+      peerId: peerId,
+      label: label,
+      message: message
+    });
+  }
+
+  getRoomConnectionState(roomId: string): string {
+    const roomConnection = this.roomConnections.get(roomId);
+    if (!roomConnection) return 'disconnected';
+
+    const snapshot = roomConnection.roomConnectionActor.getSnapshot();
+    return snapshot.value as string;
+  }
+
+  getAllRoomStates(): Record<string, { connectionState: string; alivePeers: string[] }> {
+    const states: Record<string, any> = {};
+    this.roomConnections.forEach((roomConnection, roomId) => {
+      const snapshot = roomConnection.roomConnectionActor.getSnapshot();
+      states[roomId] = {
+        connectionState: snapshot.value,
+        alivePeers: Array.from(snapshot.context.alivePeers),
+      };
+    });
+    return states;
+  }
+
+  async close(): Promise<void> {
+    console.log(`[${this.peerId}] Closing all room connections`);
+
+    const leavePromises: Promise<void>[] = [];
+    this.roomConnections.forEach((roomConnection) => {
+      leavePromises.push(this.leaveRoom(roomConnection.room));
+    });
+
+    await Promise.all(leavePromises);
+    console.log(`[${this.peerId}] Closed all connections`);
   }
 }

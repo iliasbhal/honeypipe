@@ -1,11 +1,18 @@
 import * as x from 'xstate';
 import { Channel } from '../Channel';
+import { Room } from '../Room';
 import { Peer } from '../Peer';
 import { HoneyPresenceSignal } from './HoneyPresenceSignal';
 import { HoneyPeerConnection } from './HoneyPeerConnection';
 
+// Helper function to generate channel ID for peer-to-peer communication
+function generateChannelId(peerId1: string, peerId2: string): string {
+  const sortedPeerIds = [peerId1, peerId2].sort();
+  return `${sortedPeerIds[0]}-${sortedPeerIds[1]}`;
+}
+
 interface HoneyRoomConnectionContext {
-  room: Channel<any>;
+  room: Room; // Room for presence signaling
   localPeer: Peer;
   rtcConfiguration: RTCConfiguration;
   presenceSignalActorRef?: any;
@@ -15,7 +22,7 @@ interface HoneyRoomConnectionContext {
 }
 
 interface HoneyRoomConnectionInput {
-  room: Channel<any>;
+  room: Room; // Room for presence signaling
   localPeer: Peer;
   rtcConfiguration: RTCConfiguration;
   parentRef: any;
@@ -65,7 +72,7 @@ export const HoneyRoomConnection = x.setup({
         return spawn('honeyPresenceSignal', {
           id: 'presenceSignal',
           input: {
-            channel: context.room,
+            room: context.room,
             peer: context.localPeer,
             parentRef: self,
             aliveInterval: 30000 // 30 seconds
@@ -112,13 +119,17 @@ export const HoneyRoomConnection = x.setup({
               continue;
             }
             
+            // Create a dedicated channel for this peer-to-peer connection
+            const channelId = generateChannelId(context.localPeer.id, peerId);
+            const peerChannel = new Channel(channelId, context.room.signalingAdapter);
+            
             // Spawn new peer connection
             const peerConnectionActor = spawn('honeyPeerConnection', {
               id: `peerConnection-${peerId}`,
               input: {
                 localPeer: context.localPeer,
                 remotePeerId: peerId,
-                channel: context.room,
+                channel: peerChannel, // Use dedicated channel for SDP/ICE
                 rtcConfiguration: context.rtcConfiguration,
                 parentRef: self
               }

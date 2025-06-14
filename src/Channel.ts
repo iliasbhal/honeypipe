@@ -1,5 +1,8 @@
 import { InMemorySignalingAdapter } from './adapters/InMemorySignalingAdapter';
+import { PostMessageSignalingAdapter } from './adapters/PostMessageSignalingAdapter';
+import { RedisSignalingAdapter } from './adapters/RedisSignalingAdapter';
 import { Peer } from './Peer';
+import { Room } from './Room';
 
 export type ChannelMessageHandler = (message: string, fromPeerId: string) => void;
 
@@ -11,16 +14,27 @@ export class Channel<MessageType> {
   __type!: MessageType;
   id: string; // Format: "roomId:peerId1-peerId2" (alphabetically sorted)
   roomId: string;
-  signalingAdapter: InMemorySignalingAdapter;
+  peerIds: [string, string]; // The two peer IDs in this channel
+  signalingAdapter: InMemorySignalingAdapter | PostMessageSignalingAdapter | RedisSignalingAdapter;
   private messageHandlers: Set<ChannelMessageHandler> = new Set();
   private connectedPeers: Map<string, Peer> = new Map(); // Should only have 2 peers max
-  private room: any; // Reference to the room for message routing
+  private room: Room; // Reference to the room for message routing
+  private peerConnectionActor: any; // HoneyPeerConnection actor for this channel
   private isActive: boolean = true;
 
-  constructor(id: string, signalingAdapter: InMemorySignalingAdapter, roomId?: string) {
+  constructor(id: string, signalingAdapter: InMemorySignalingAdapter | PostMessageSignalingAdapter | RedisSignalingAdapter, roomId?: string) {
     this.id = id;
     this.roomId = roomId || id.split(':')[0]; // Extract roomId from id if not provided
     this.signalingAdapter = signalingAdapter;
+    
+    // Extract peer IDs from channel ID
+    const channelPart = id.includes(':') ? id.split(':')[1] : id;
+    const [peerId1, peerId2] = channelPart.split('-');
+    this.peerIds = [peerId1, peerId2];
+    
+    if (!peerId1 || !peerId2) {
+      throw new Error(`Invalid channel ID format: ${id}. Expected "roomId:peerId1-peerId2"`);
+    }
   }
 
   notifyMessageRecevied(messageStr: string): void {
@@ -41,45 +55,122 @@ export class Channel<MessageType> {
   /**
    * Set the room reference for message routing
    */
-  setRoom(room: any): void {
+  setRoom(room: Room): void {
     this.room = room;
+  }
+
+  /**
+   * Set the HoneyPeerConnection actor for this channel
+   */
+  setPeerConnectionActor(actor: any): void {
+    this.peerConnectionActor = actor;
+  }
+
+  /**
+   * Get the HoneyPeerConnection actor for this channel
+   */
+  getPeerConnectionActor(): any {
+    return this.peerConnectionActor;
+  }
+
+  /**
+   * Check if this channel has a peer connection actor
+   */
+  hasPeerConnectionActor(): boolean {
+    return !!this.peerConnectionActor;
+  }
+
+  /**
+   * Check if a peer ID belongs to this channel
+   */
+  hasPeerId(peerId: string): boolean {
+    return this.peerIds.includes(peerId);
+  }
+
+  /**
+   * Get the other peer ID in this channel (given one peer ID)
+   */
+  getOtherPeerId(peerId: string): string | null {
+    if (!this.hasPeerId(peerId)) {
+      return null;
+    }
+    return this.peerIds[0] === peerId ? this.peerIds[1] : this.peerIds[0];
+  }
+
+  /**
+   * Get both peer IDs in this channel
+   */
+  getPeerIds(): [string, string] {
+    return [...this.peerIds] as [string, string];
   }
 
   /**
    * Send message to the other peer in this channel
    */
   sendMessage(message: string, dataChannelLabel?: string): void {
-    if (!this.room) {
-      console.warn(`[Channel ${this.id}] No room connection to send message`);
-      return;
-    }
-    
-    const [peerId1, peerId2] = this.id.split(':')[1].split('-');
-    
-    // Find which room connection actor should handle this message
-    // We need to send via any peer's room connection actor
-    const roomConnectionActors = this.room.roomConnectionActors;
-    if (roomConnectionActors.size === 0) {
-      console.warn(`[Channel ${this.id}] No room connection actors available`);
+    // First try to use the direct peer connection actor
+    if (this.peerConnectionActor) {
+      if (dataChannelLabel) {
+        this.peerConnectionActor.send({
+          type: 'SEND_DATA_CHANNEL_MESSAGE',
+          label: dataChannelLabel,
+          message: message
+        });
+      } else {
+        this.peerConnectionActor.send({
+          type: 'SEND_MESSAGE',
+          message: message
+        });
+      }
       return;
     }
 
-    // Use the first available room connection actor to send the message
-    const firstActor = Array.from(roomConnectionActors.values())[0];
+    // Fallback to room-based messaging if no direct peer connection
+    if (!this.room) {
+      console.warn(`[Channel ${this.id}] No peer connection actor or room available to send message`);
+      return;
+    }
+
+    // Try to get peer connection actor from room
+    const roomPeerConnectionActor = this.room.getPeerConnectionActor?.(this.peerIds[0], this.peerIds[1]);
+    if (roomPeerConnectionActor) {
+      this.setPeerConnectionActor(roomPeerConnectionActor);
+      this.sendMessage(message, dataChannelLabel); // Retry with the actor
+      return;
+    }
+
+    // Ultimate fallback: use room connection actors
+    const roomConnectionActors = this.room.roomConnectionActors;
+    if (!roomConnectionActors || roomConnectionActors.size === 0) {
+      console.warn(`[Channel ${this.id}] No messaging path available`);
+      return;
+    }
+
+    // Find which peer's room connection can send the message
+    const senderPeerId = Array.from(roomConnectionActors.keys()).find(id => this.hasPeerId(id));
+    if (!senderPeerId) {
+      console.warn(`[Channel ${this.id}] No channel peers found in room connections`);
+      return;
+    }
+
+    const targetPeerId = this.getOtherPeerId(senderPeerId);
+    const senderActor = roomConnectionActors.get(senderPeerId);
     
-    // Determine target peer ID
-    const senderPeerId = Array.from(roomConnectionActors.keys())[0];
-    const targetPeerId = peerId1 === senderPeerId ? peerId2 : peerId1;
-    
+    if (!senderActor || !targetPeerId) {
+      console.warn(`[Channel ${this.id}] Cannot determine message routing`);
+      return;
+    }
+
+    // Send via room connection actor
     if (dataChannelLabel) {
-      firstActor.send({
+      senderActor.send({
         type: 'SEND_MESSAGE_TO_DATACHANNEL',
         peerId: targetPeerId,
         label: dataChannelLabel,
         message: message
       });
     } else {
-      firstActor.send({
+      senderActor.send({
         type: 'SEND_MESSAGE_TO_PEER',
         peerId: targetPeerId,
         message: message
@@ -112,10 +203,17 @@ export class Channel<MessageType> {
     });
   }
 
-  // Track a peer that has connected to this channel
+  /**
+   * Track a peer that has connected to this channel
+   */
   addPeer(peer: Peer): void {
     if (!this.isActive) {
-      console.warn(`Channel ${this.id} is stopped, cannot add peer ${peer.id}`);
+      console.warn(`[Channel ${this.id}] Channel is stopped, cannot add peer ${peer.id}`);
+      return;
+    }
+
+    if (!this.hasPeerId(peer.id)) {
+      console.warn(`[Channel ${this.id}] Peer ${peer.id} does not belong to this channel. Expected: ${this.peerIds.join(' or ')}`);
       return;
     }
 
@@ -123,25 +221,49 @@ export class Channel<MessageType> {
     this.connectedPeers.set(peer.id, peer);
   }
 
-  // Remove a peer from this channel
+  /**
+   * Remove a peer from this channel
+   */
   removePeer(peerId: string): void {
-    console.log(`[Channel ${this.id}] Removing peer ${peerId}`);
-    this.connectedPeers.delete(peerId);
+    if (this.connectedPeers.has(peerId)) {
+      console.log(`[Channel ${this.id}] Removing peer ${peerId}`);
+      this.connectedPeers.delete(peerId);
+    }
   }
 
-  // Get all connected peers
-  getPeers(): Peer[] {
+  /**
+   * Get all connected peer instances
+   */
+  getConnectedPeers(): Peer[] {
     return Array.from(this.connectedPeers.values());
   }
 
-  // Get peer count
-  getPeerCount(): number {
+  /**
+   * Get connected peer count
+   */
+  getConnectedPeerCount(): number {
     return this.connectedPeers.size;
   }
 
-  // Check if a specific peer is connected
-  hasPeer(peerId: string): boolean {
+  /**
+   * Check if a specific peer is currently connected to this channel
+   */
+  isPeerConnected(peerId: string): boolean {
     return this.connectedPeers.has(peerId);
+  }
+
+  /**
+   * Check if both channel peers are connected
+   */
+  isBothPeersConnected(): boolean {
+    return this.peerIds.every(peerId => this.connectedPeers.has(peerId));
+  }
+
+  /**
+   * Get the peer instance for a given peer ID (if connected)
+   */
+  getPeer(peerId: string): Peer | null {
+    return this.connectedPeers.get(peerId) || null;
   }
 
   // Stop the channel and disconnect all peers

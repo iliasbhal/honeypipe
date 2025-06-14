@@ -1,32 +1,24 @@
 import { InMemorySignalingAdapter } from './adapters/InMemorySignalingAdapter';
+import { RedisSignalingAdapter } from './adapters/RedisSignalingAdapter';
 import { createActor, Actor } from 'xstate';
-import { HoneyRoomConnection } from './machines/HoneyRoomConnection';
 
 export type RoomMessageHandler = (message: string, fromPeerId: string) => void;
 export type RoomPresenceHandler = (event: { type: 'join' | 'leave' | 'alive'; peerId: string; roomId: string }) => void;
 
 export class Room {
   id: string;
-  signalingAdapter: InMemorySignalingAdapter;
+  signalingAdapter: InMemorySignalingAdapter | RedisSignalingAdapter;
   rtcConfiguration: RTCConfiguration;
   private connectedPeerIds: Set<string> = new Set(); // Track peer IDs only
   private isActive: boolean = true;
   private messageHandlers: Set<RoomMessageHandler> = new Set();
   private presenceHandlers: Set<RoomPresenceHandler> = new Set();
-  private roomConnectionActors: Map<string, Actor<typeof HoneyRoomConnection>> = new Map(); // peerId -> actor
+  roomConnectionActors: Map<string, any> = new Map(); // peerId -> actor (made public for Channel access)
 
-  constructor(id: string, signalingAdapter: InMemorySignalingAdapter, rtcConfiguration?: RTCConfiguration) {
+  constructor(id: string, signalingAdapter: InMemorySignalingAdapter | RedisSignalingAdapter, rtcConfiguration?: RTCConfiguration) {
     this.id = id;
     this.signalingAdapter = signalingAdapter;
-    this.rtcConfiguration = rtcConfiguration || {
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" }
-      ],
-      iceCandidatePoolSize: 10,
-      bundlePolicy: 'balanced' as RTCBundlePolicy,
-      rtcpMuxPolicy: 'require' as RTCRtcpMuxPolicy
-    };
+    this.rtcConfiguration = rtcConfiguration;
   }
 
   /**
@@ -84,7 +76,7 @@ export class Room {
   stop(): void {
     console.log(`[Room ${this.id}] Stopping room`);
     this.isActive = false;
-    
+
     // Clear all peer IDs (individual peers will handle their own cleanup)
     this.connectedPeerIds.clear();
   }
@@ -112,6 +104,9 @@ export class Room {
 
     console.log(`[Room ${this.id}] Adding peer ${peer.peerId}`);
 
+    // Dynamic import to avoid circular dependency
+    const { HoneyRoomConnection } = await import('./machines/HoneyRoomConnection');
+
     // Create room connection actor for this peer
     const roomConnectionActor = createActor(HoneyRoomConnection, {
       input: {
@@ -131,7 +126,7 @@ export class Room {
 
     // Start the room connection actor
     roomConnectionActor.start();
-    
+
     // Join the room
     roomConnectionActor.send({ type: 'JOIN_ROOM' });
 
@@ -185,7 +180,7 @@ export class Room {
       console.warn(`[Room ${this.id}] No connected peers to send message`);
       return;
     }
-    
+
     // Send to all connected peers
     this.roomConnectionActors.forEach((actor) => {
       actor.send({
@@ -203,10 +198,42 @@ export class Room {
     const { Channel } = require('./Channel');
     const sortedPeerIds = [peerId1, peerId2].sort();
     const channelId = `${this.id}:${sortedPeerIds[0]}-${sortedPeerIds[1]}`;
-    
+
     const channel = new Channel(channelId, this.signalingAdapter, this.id);
     channel.setRoom(this);
+
+    // Try to set the peer connection actor if available
+    const peerConnectionActor = this.getPeerConnectionActor(peerId1, peerId2);
+    if (peerConnectionActor) {
+      channel.setPeerConnectionActor(peerConnectionActor);
+    }
+
     return channel;
+  }
+
+  /**
+   * Get the HoneyPeerConnection actor for a specific peer pair
+   */
+  getPeerConnectionActor(peerId1: string, peerId2: string): any {
+    // Check if either peer has the connection to the other
+    for (const [connectedPeerId, roomConnectionActor] of this.roomConnectionActors) {
+      if (connectedPeerId === peerId1) {
+        // Look for peer connection to peerId2
+        const snapshot = roomConnectionActor.getSnapshot();
+        const peerConnection = snapshot.context.peerConnections?.get(peerId2);
+        if (peerConnection) {
+          return peerConnection;
+        }
+      } else if (connectedPeerId === peerId2) {
+        // Look for peer connection to peerId1
+        const snapshot = roomConnectionActor.getSnapshot();
+        const peerConnection = snapshot.context.peerConnections?.get(peerId1);
+        if (peerConnection) {
+          return peerConnection;
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -214,7 +241,7 @@ export class Room {
    */
   onMessage(handler: RoomMessageHandler): () => void {
     this.messageHandlers.add(handler);
-    
+
     // Return cleanup function
     return () => {
       this.messageHandlers.delete(handler);
@@ -226,7 +253,7 @@ export class Room {
    */
   onPresence(handler: RoomPresenceHandler): () => void {
     this.presenceHandlers.add(handler);
-    
+
     // Return cleanup function  
     return () => {
       this.presenceHandlers.delete(handler);
@@ -238,7 +265,7 @@ export class Room {
    */
   private handleRoomConnectionEvent(event: any, fromPeerId: string): void {
     console.log(`[Room ${this.id}] Event from ${fromPeerId}:`, event);
-    
+
     switch (event.type) {
       case 'ROOM_MESSAGE_RECEIVED':
         if (event.broadcast) {

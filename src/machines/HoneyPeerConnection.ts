@@ -1,7 +1,7 @@
 import * as x from 'xstate';
 import { Channel } from '../Channel';
 import { Peer } from '../Peer';
-import { SignalingEvent } from '../adapters/InMemorySignalingAdapter';
+import { SignalingEvent } from '../adapters/_base';
 import { RTCPeerConnectionMachine } from './RTCPeerConnection';
 
 interface HoneyPeerConnectionContext {

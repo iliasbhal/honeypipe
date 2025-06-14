@@ -1,5 +1,5 @@
 {
-  "include": ["src", "vite.config.ts", "playground/components"],
+  "include": ["src", "vite.config.ts", "playground/debug"],
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2023", "DOM"],

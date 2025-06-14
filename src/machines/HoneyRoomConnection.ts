@@ -122,6 +122,7 @@ export const HoneyRoomConnection = x.setup({
             // Create a dedicated channel for this peer-to-peer connection
             const channelId = generateChannelId(context.room.id, context.localPeer.id, peerId);
             const peerChannel = new Channel(channelId, context.room.signalingAdapter, context.room.id);
+            peerChannel.setRoom(context.room);
             
             // Spawn new peer connection
             const peerConnectionActor = spawn('honeyPeerConnection', {
@@ -134,6 +135,9 @@ export const HoneyRoomConnection = x.setup({
                 parentRef: self
               }
             });
+            
+            // Set the peer connection actor on the channel
+            peerChannel.setPeerConnectionActor(peerConnectionActor);
             
             newPeerConnections.set(peerId, peerConnectionActor);
             

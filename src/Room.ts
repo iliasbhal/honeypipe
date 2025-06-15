@@ -7,11 +7,16 @@ import { SignalingAdapter } from './adapters/_base';
 export class Room {
   readonly id: string;
   readonly signalingAdapter: SignalingAdapter;
-  readonly rtcConfiguration?: RTCConfiguration;
 
-  constructor(id: string, signalingAdapter: SignalingAdapter, rtcConfiguration?: RTCConfiguration) {
+  constructor(id: string, signalingAdapter: SignalingAdapter) {
     this.id = id;
     this.signalingAdapter = signalingAdapter;
-    this.rtcConfiguration = rtcConfiguration;
+  }
+
+  /**
+   * Get RTC configuration from the signaling adapter
+   */
+  getRtcConfiguration(): RTCConfiguration {
+    return this.signalingAdapter.getRtcConfiguration();
   }
 }

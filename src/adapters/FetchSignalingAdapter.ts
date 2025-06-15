@@ -5,6 +5,7 @@ export interface FetchSignalingAdapterConfig {
   pullUrl: string;
   headers?: Record<string, string>;
   timeout?: number;
+  rtcConfiguration?: RTCConfiguration;
 }
 
 export class FetchSignalingAdapter implements SignalingAdapter {
@@ -13,6 +14,19 @@ export class FetchSignalingAdapter implements SignalingAdapter {
   constructor(config: FetchSignalingAdapterConfig) {
     this.config = {
       timeout: 5000,
+      rtcConfiguration: {
+        iceServers: [
+          {
+            urls: [
+              'stun:stun.l.google.com:19302',
+              'stun:stun1.l.google.com:19302'
+            ]
+          }
+        ],
+        iceCandidatePoolSize: 10,
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require'
+      },
       ...config
     };
   }
@@ -120,5 +134,12 @@ export class FetchSignalingAdapter implements SignalingAdapter {
 
   async close(): Promise<void> {
     // No-op
+  }
+
+  /**
+   * Get RTC configuration for WebRTC connections
+   */
+  getRtcConfiguration(): RTCConfiguration {
+    return this.config.rtcConfiguration!;
   }
 }

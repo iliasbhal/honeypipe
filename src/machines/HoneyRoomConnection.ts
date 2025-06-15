@@ -14,7 +14,6 @@ function generateChannelId(roomId: string, peerId1: string, peerId2: string): st
 interface HoneyRoomConnectionContext {
   room: Room; // Room for presence signaling
   localPeer: Peer;
-  rtcConfiguration: RTCConfiguration;
   presenceSignalActorRef?: any;
   peerConnections: Map<string, any>; // peerId -> HoneyPeerConnection actor ref
   alivePeers: Set<string>; // Set of peer IDs that are currently alive
@@ -24,7 +23,6 @@ interface HoneyRoomConnectionContext {
 interface HoneyRoomConnectionInput {
   room: Room; // Room for presence signaling
   localPeer: Peer;
-  rtcConfiguration: RTCConfiguration;
   parentRef: any;
 }
 
@@ -129,7 +127,7 @@ export const HoneyRoomConnection = x.setup({
                 localPeer: context.localPeer,
                 remotePeerId: peerId,
                 channel: peerChannel, // Use dedicated channel for SDP/ICE
-                rtcConfiguration: context.rtcConfiguration,
+                rtcConfiguration: context.room.getRtcConfiguration(),
                 signalingAdapter: context.room.signalingAdapter,
                 parentRef: self
               }
@@ -233,6 +231,21 @@ export const HoneyRoomConnection = x.setup({
         broadcast: (event as any).broadcast || false // Pass through broadcast flag
       });
     },
+    notifyPresenceEvents: ({ context, event }) => {
+      if (event.type !== 'PRESENCE_EVENTS') return;
+
+      // Forward presence events to parent for handling
+      for (const presenceEvent of event.data.events) {
+        if (presenceEvent.peerId === context.localPeer.id) continue; // Skip our own events
+        
+        context.parentRef.send({
+          type: 'ROOM_PRESENCE_EVENT',
+          roomId: context.room.id,
+          peerId: presenceEvent.peerId,
+          presenceType: presenceEvent.type
+        });
+      }
+    },
     startPresenceSignal: ({ context }) => {
       if (context.presenceSignalActorRef) {
         context.presenceSignalActorRef.send({ type: 'START' });
@@ -261,7 +274,6 @@ export const HoneyRoomConnection = x.setup({
   context: ({ input }) => ({
     room: input.room,
     localPeer: input.localPeer,
-    rtcConfiguration: input.rtcConfiguration,
     parentRef: input.parentRef,
     peerConnections: new Map(),
     alivePeers: new Set(),
@@ -279,7 +291,7 @@ export const HoneyRoomConnection = x.setup({
       on: {
         PRESENCE_EVENTS: {
           target: 'connected',
-          actions: ['updateAlivePeers', 'spawnPeerConnections']
+          actions: ['updateAlivePeers', 'spawnPeerConnections', 'notifyPresenceEvents']
         },
         LEAVE_ROOM: {
           target: 'disconnecting'
@@ -292,7 +304,8 @@ export const HoneyRoomConnection = x.setup({
           actions: [
             'updateAlivePeers',
             'spawnPeerConnections',
-            'cleanupDeadPeerConnections'
+            'cleanupDeadPeerConnections',
+            'notifyPresenceEvents'
           ]
         },
         SEND_MESSAGE_TO_PEER: [

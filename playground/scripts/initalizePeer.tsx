@@ -1,31 +1,23 @@
-import { FetchSignalingAdapter } from "../../src/adapters/FetchSignalingAdapter";
+import { SignalingAdapter } from "../../src/adapters/_base";
 import { Peer } from "../../src/Peer";
 import { Room } from "../../src/Room";
 
-export const initializePeerInRoom = (roomId: string) => {  
-  const httpSignalAdapter = new FetchSignalingAdapter({
-    pullUrl: window.location.origin + '/api/pull',
-    pushUrl: window.location.origin + '/api/push',
+export const initializePeerInRoom = (roomId: string, signalingAdapter: SignalingAdapter) => {  
+
+  const peer = new Peer();
+  const room = new Room(roomId, signalingAdapter);
+
+  peer.joinRoom(room);
+
+  peer.via(room).onPresence((event) => {
+    console.log('Presence event:', event);
   });
 
-  const peerId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
+  peer.via(room).onMessage((message) => {
+    console.log('Message:', message);
   });
 
-  const peer = new Peer({ peerId });
-  const room = new Room(roomId!, httpSignalAdapter, {
-    iceServers: [{
-      urls: [
-        'stun:stun.l.google.com:19302',
-        'stun:stun1.l.google.com:19302'
-      ]
-    }],
-    iceCandidatePoolSize: 10,
-    bundlePolicy: 'max-bundle',
-    rtcpMuxPolicy: 'require'
-  });
+  peer.joinRoom(room);
 
   return { peer, room };
 }

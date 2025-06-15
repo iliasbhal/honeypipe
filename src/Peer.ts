@@ -8,6 +8,14 @@ export interface PeerOptions {
   peerId: string;
 }
 
+const uuid = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 /**
  * Peer represents a WebRTC peer with all actors managed internally
  * Use peer.via(room) or peer.via(channel) to interact with rooms and channels
@@ -21,8 +29,8 @@ export class Peer {
   private peerRooms: Map<string, PeerRoom> = new Map(); // roomId -> PeerRoom instance
   private peerChannels: Map<string, PeerChannel> = new Map(); // channelId -> PeerChannel instance
 
-  constructor(options: PeerOptions) {
-    this.peerId = options.peerId;
+  constructor(options?: PeerOptions) {
+    this.peerId = options?.peerId || uuid();
   }
 
   get id(): string {
@@ -61,10 +69,10 @@ export class Peer {
   /**
    * Join a room (internal use by PeerRoom)
    */
-  async joinRoom(room: Room): Promise<void> {
+  async joinRoom(room: Room): Promise<PeerRoom> {
     if (this.roomConnectionActors.has(room.id)) {
       console.log(`[${this.peerId}] Already connected to room ${room.id}`);
-      return;
+      return this.via(room);
     }
 
     // Dynamic import to avoid circular dependency
@@ -75,7 +83,6 @@ export class Peer {
       input: {
         room: room,
         localPeer: this,
-        rtcConfiguration: room.rtcConfiguration,
         parentRef: {
           send: (event: any) => {
             this.handleRoomConnectionEvent(event, room.id);
@@ -93,6 +100,8 @@ export class Peer {
     roomConnectionActor.send({ type: 'JOIN_ROOM' });
 
     console.log(`[${this.peerId}] Joined room ${room.id}`);
+
+    return this.via(room);
   }
 
   /**
@@ -160,6 +169,9 @@ export class Peer {
       case 'ROOM_PEER_DISCONNECTED':
         peerRoom.notifyPresenceHandlers({ type: 'leave', peerId: event.peerId, roomId: event.roomId });
         break;
+      case 'ROOM_PRESENCE_EVENT':
+        peerRoom.notifyPresenceHandlers({ type: event.presenceType, peerId: event.peerId, roomId: event.roomId });
+        break;
     }
   }
 
@@ -175,7 +187,7 @@ export class Peer {
     }
 
     await Promise.all(leavePromises);
-    
+
     console.log(`[${this.peerId}] All connections closed`);
   }
 }

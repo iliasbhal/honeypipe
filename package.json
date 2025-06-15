@@ -10,12 +10,15 @@
   "scripts": {
     "dev": "vite",
     "test": "vitest",
-    "demo:master": "tsx scripts/master-process.ts"
+    "demo:master": "tsx scripts/master-process.ts",
+    "demo:peers": "tsx playground/script.tsx",
+    "demo:ink": "yarn tsx playground/ink-demo.tsx"
   },
   "dependencies": {
     "@number-flow/react": "^0.5.10",
     "@types/simple-peer": "^9.11.8",
     "convex": "^1.24.8",
+    "ink": "4.4.1",
     "ioredis-mock": "^8.9.0",
     "motion": "^12.16.0",
     "nuqs": "^2.4.3",

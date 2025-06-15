@@ -26,6 +26,7 @@ export interface SignalingAdapter {
   push(event: SignalingEvent): Promise<number>;
   pull(request: SignalPullRequest): Promise<SignalingEvent[]>;
   close(): Promise<void>;
+  getRtcConfiguration(): RTCConfiguration;
 }
 
 export interface RemotePeerData {

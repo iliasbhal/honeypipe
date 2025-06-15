@@ -1,30 +1,7 @@
 import Redis from 'ioredis-mock';
+import { SignalingEvent, SignalingAdapter, SignalPullRequest } from './_base';
 
-export type SignalingEvent = {
-  peerId: string;
-  roomId: string;
-  type: 'join' | 'leave' | 'alive';
-} | {
-  peerId: string;
-  channelId: string;
-  type: 'sdpOffer' | 'sdpAnswer';
-  data: RTCSessionDescriptionInit;
-} | {
-  peerId: string;
-  channelId: string;
-  type: 'iceCandidate';
-  data: RTCIceCandidateInit;
-}
-
-type SignalPullRequest = {
-  roomId: string;
-  offsetIndex: number;
-} | {
-  channelId: string;
-  offsetIndex: number;
-}
-
-export class InMemorySignalingAdapter {
+export class InMemorySignalingAdapter implements SignalingAdapter {
   private redis: InstanceType<typeof Redis>;
 
   constructor() {

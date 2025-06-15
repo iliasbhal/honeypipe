@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { IframePeer } from './IframePeer'
+import { FetchAdapterDemo } from './FetchAdapterDemo'
 
 // This will be detected via URL params instead
 
@@ -9,6 +10,7 @@ function PeerView() {
 }
 
 function MainPlayground() {
+  const [activeTab, setActiveTab] = useState<'iframe' | 'fetch'>('iframe');
   const [roomId] = useState(() => `room-${Math.random().toString(36).substring(2, 8)}`);
   const [messages, setMessages] = useState<Array<{ source: string; data: any }>>([]);
 
@@ -28,6 +30,51 @@ function MainPlayground() {
 
   return (
     <div style={{ 
+      height: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      fontFamily: 'system-ui, -apple-system, sans-serif'
+    }}>
+      {/* Tab Navigation */}
+      <div style={{ 
+        display: 'flex',
+        backgroundColor: '#f5f5f5',
+        borderBottom: '1px solid #ddd',
+        padding: '0'
+      }}>
+        <button
+          onClick={() => setActiveTab('iframe')}
+          style={{
+            padding: '15px 30px',
+            border: 'none',
+            backgroundColor: activeTab === 'iframe' ? 'white' : 'transparent',
+            borderBottom: activeTab === 'iframe' ? '2px solid #1976d2' : 'none',
+            cursor: 'pointer',
+            fontWeight: activeTab === 'iframe' ? 'bold' : 'normal',
+            color: activeTab === 'iframe' ? '#1976d2' : '#666'
+          }}
+        >
+          Iframe Demo
+        </button>
+        <button
+          onClick={() => setActiveTab('fetch')}
+          style={{
+            padding: '15px 30px',
+            border: 'none',
+            backgroundColor: activeTab === 'fetch' ? 'white' : 'transparent',
+            borderBottom: activeTab === 'fetch' ? '2px solid #1976d2' : 'none',
+            cursor: 'pointer',
+            fontWeight: activeTab === 'fetch' ? 'bold' : 'normal',
+            color: activeTab === 'fetch' ? '#1976d2' : '#666'
+          }}
+        >
+          Fetch Adapter Demo
+        </button>
+      </div>
+
+      {/* Content */}
+      {activeTab === 'iframe' ? (
+        <div style={{ 
       height: '100vh', 
       display: 'flex', 
       flexDirection: 'column',
@@ -134,6 +181,10 @@ function MainPlayground() {
           </div>
         ))}
       </div>
+    </div>
+      ) : (
+        <FetchAdapterDemo />
+      )}
     </div>
   );
 }

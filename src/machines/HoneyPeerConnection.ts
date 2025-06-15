@@ -1,7 +1,7 @@
 import * as x from 'xstate';
 import { Channel } from '../Channel';
 import { Peer } from '../Peer';
-import { SignalingEvent } from '../adapters/_base';
+import { SignalingAdapter, SignalingEvent } from '../adapters/_base';
 import { RTCPeerConnectionMachine } from './RTCPeerConnection';
 
 interface HoneyPeerConnectionContext {
@@ -9,6 +9,7 @@ interface HoneyPeerConnectionContext {
   remotePeerId: string;
   channel: Channel<any>;
   rtcConfiguration: RTCConfiguration;
+  signalingAdapter: SignalingAdapter;
   rtcPeerConnectionActorRef?: any;
   isInitiator?: boolean;
   eventHistory: SignalingEvent[];
@@ -20,6 +21,7 @@ interface HoneyPeerConnectionInput {
   remotePeerId: string;
   channel: Channel<any>;
   rtcConfiguration: RTCConfiguration;
+  signalingAdapter: SignalingAdapter;
   parentRef: any;
 }
 
@@ -126,7 +128,7 @@ export const HoneyPeerConnection = x.setup({
     }),
     sendOffer: async ({ context, event }) => {
       if (event.type === 'RTC_OFFER_CREATED') {
-        await context.channel.signalingAdapter.push({
+        await context.signalingAdapter.push({
           channelId: context.channel.id,
           peerId: context.localPeer.id,
           type: 'sdpOffer',
@@ -136,7 +138,7 @@ export const HoneyPeerConnection = x.setup({
     },
     sendAnswer: async ({ context, event }) => {
       if (event.type === 'RTC_ANSWER_CREATED') {
-        await context.channel.signalingAdapter.push({
+        await context.signalingAdapter.push({
           channelId: context.channel.id,
           peerId: context.localPeer.id,
           type: 'sdpAnswer',
@@ -146,7 +148,7 @@ export const HoneyPeerConnection = x.setup({
     },
     sendIceCandidate: async ({ context, event }) => {
       if (event.type === 'RTC_ICE_CANDIDATE' && event.candidate) {
-        await context.channel.signalingAdapter.push({
+        await context.signalingAdapter.push({
           channelId: context.channel.id,
           peerId: context.localPeer.id,
           type: 'iceCandidate',
@@ -214,6 +216,7 @@ export const HoneyPeerConnection = x.setup({
     remotePeerId: input.remotePeerId,
     channel: input.channel,
     rtcConfiguration: input.rtcConfiguration,
+    signalingAdapter: input.signalingAdapter,
     parentRef: input.parentRef,
     eventHistory: [],
   }),

@@ -1,7 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { Room } from '../src/Room';
-import { Peer } from '../src/Peer';
-import { PostMessageSignalingAdapter } from '../src/adapters/PostMessageSignalingAdapter';
+import React, { useEffect, useState } from 'react';
+import { initializePeerInRoom } from './scripts/initalizePeer';
 
 interface Message {
   from: string;
@@ -10,53 +8,33 @@ interface Message {
   type: 'room' | 'direct';
 }
 
+
+const params = new URLSearchParams(window.location.search);
+const roomId = params.get('room')!;
+
+const { peer, room } = initializePeerInRoom(roomId);
+const peerRoom = peer.via(room);
+
+
+
 /**
  * IframePeer component - runs inside an iframe and represents a single peer
  */
 export function IframePeer() {
-  const [peerId] = useState(() => `peer-${Math.random().toString(36).substring(2, 8)}`);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [roomId, setRoomId] = useState<string | null>(null);
   const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   
-  const peerRef = useRef<Peer | null>(null);
-  const roomRef = useRef<Room | null>(null);
-  const adapterRef = useRef<PostMessageSignalingAdapter | null>(null);
-
-  // Initialize from URL params
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const room = params.get('room');
-    if (room) {
-      setRoomId(room);
-    }
-  }, []);
 
   // Connect to room
   useEffect(() => {
     if (!roomId) return;
 
-    async function connect() {
-      console.log(`[${peerId}] Connecting to room ${roomId}...`);
-      
-      // Create PostMessage signaling adapter (communicates with parent)
-      const adapter = new PostMessageSignalingAdapter(window.parent, '*');
-      adapterRef.current = adapter;
-
-      // Create room
-      const room = new Room(roomId!, adapter, {
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-      });
-      roomRef.current = room;
-
-      // Create peer
-      const peer = new Peer({ peerId });
-      peerRef.current = peer;
+      console.log(`[${peer.id}] Connecting to room ${roomId}...`);
 
       // Setup message handlers
-      room.onMessage((message, fromPeerId) => {
+      peerRoom.onMessage((message, fromPeerId) => {
         setMessages(prev => [...prev, {
           from: fromPeerId,
           content: message,
@@ -66,8 +44,8 @@ export function IframePeer() {
       });
 
       // Setup presence handlers
-      room.onPresence((event) => {
-        console.log(`[${peerId}] Presence event:`, event);
+      peerRoom.onPresence((event) => {
+        console.log(`[${peer.id}] Presence event:`, event);
         
         if (event.type === 'join') {
           setConnectedPeers(prev => [...prev.filter(p => p !== event.peerId), event.peerId]);
@@ -77,39 +55,16 @@ export function IframePeer() {
       });
 
       // Join room
-      await peer.joinRoom(room);
-      setIsConnected(true);
-      
-      // Send join message
-      room.sendMessage(`${peerId} joined the room!`);
-    }
-
-    connect().catch(console.error);
-
-    // Cleanup
-    return () => {
-      if (peerRef.current && roomRef.current) {
-        peerRef.current.leaveRoom(roomRef.current).then(() => {
-          peerRef.current?.close();
-          adapterRef.current?.close();
-        });
-      }
-    };
-  }, [roomId, peerId]);
+      peerRoom.join().then(() => {
+        setIsConnected(true);
+      }).catch(err => {
+        console.error(`Failed to join room:`, err);
+        setIsConnected(false);
+      });
+  }, []);
 
   const sendMessage = () => {
-    if (!inputMessage.trim() || !roomRef.current || !isConnected) return;
-    
-    roomRef.current.sendMessage(inputMessage);
-    
-    // Add own message to list
-    setMessages(prev => [...prev, {
-      from: peerId,
-      content: inputMessage,
-      timestamp: Date.now(),
-      type: 'room'
-    }]);
-    
+    peerRoom.broadcast(inputMessage);
     setInputMessage('');
   };
 
@@ -132,7 +87,7 @@ export function IframePeer() {
         alignItems: 'center'
       }}>
         <div>
-          <strong>Peer ID:</strong> {peerId}
+          <strong>Peer ID:</strong> {peer.id}
         </div>
         <div>
           <strong>Room:</strong> {roomId || 'Not connected'}
@@ -168,13 +123,13 @@ export function IframePeer() {
             style={{
               marginBottom: '10px',
               padding: '8px 12px',
-              backgroundColor: msg.from === peerId ? '#e3f2fd' : '#f5f5f5',
+              backgroundColor: msg.from === peer.id ? '#e3f2fd' : '#f5f5f5',
               borderRadius: '8px',
               fontSize: '14px'
             }}
           >
             <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#666' }}>
-              {msg.from === peerId ? 'You' : msg.from}
+              {msg.from === peer.id ? 'You' : msg.from}
             </div>
             <div>{msg.content}</div>
           </div>

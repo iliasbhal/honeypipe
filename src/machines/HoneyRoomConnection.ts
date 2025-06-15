@@ -55,8 +55,8 @@ export const HoneyRoomConnection = x.setup({
     isNewPeer: ({ context, event }) => {
       if (event.type !== 'PRESENCE_EVENTS') return false;
       // Check if any join events are for peers we don't have connections to
-      return event.data.events.some(presenceEvent => 
-        presenceEvent.type === 'join' && 
+      return event.data.events.some(presenceEvent =>
+        presenceEvent.type === 'join' &&
         presenceEvent.peerId !== context.localPeer.id &&
         !context.peerConnections.has(presenceEvent.peerId)
       );
@@ -83,12 +83,12 @@ export const HoneyRoomConnection = x.setup({
     updateAlivePeers: x.assign({
       alivePeers: ({ context, event }) => {
         if (event.type !== 'PRESENCE_EVENTS') return context.alivePeers;
-        
+
         const newAlivePeers = new Set(context.alivePeers);
-        
+
         for (const presenceEvent of event.data.events) {
           if (presenceEvent.peerId === context.localPeer.id) continue; // Skip our own events
-          
+
           switch (presenceEvent.type) {
             case 'join':
             case 'alive':
@@ -99,31 +99,29 @@ export const HoneyRoomConnection = x.setup({
               break;
           }
         }
-        
+
         return newAlivePeers;
       }
     }),
     spawnPeerConnections: x.assign({
       peerConnections: ({ context, event, spawn, self }) => {
         if (event.type !== 'PRESENCE_EVENTS') return context.peerConnections;
-        
+
         const newPeerConnections = new Map(context.peerConnections);
-        
+
         // Create connections for new alive peers
         for (const presenceEvent of event.data.events) {
           if (presenceEvent.type === 'join' || presenceEvent.type === 'alive') {
             const peerId = presenceEvent.peerId;
-            
+
             // Skip if it's our own peer or we already have a connection
             if (peerId === context.localPeer.id || newPeerConnections.has(peerId)) {
               continue;
             }
-            
+
             // Create a dedicated channel for this peer-to-peer connection
-            const channelId = generateChannelId(context.room.id, context.localPeer.id, peerId);
-            const peerChannel = new Channel(channelId, context.room.signalingAdapter, context.room.id);
-            peerChannel.setRoom(context.room);
-            
+            const peerChannel = new Channel(context.room.id, context.localPeer.id, peerId);
+
             // Spawn new peer connection
             const peerConnectionActor = spawn('honeyPeerConnection', {
               id: `peerConnection-${peerId}`,
@@ -132,48 +130,48 @@ export const HoneyRoomConnection = x.setup({
                 remotePeerId: peerId,
                 channel: peerChannel, // Use dedicated channel for SDP/ICE
                 rtcConfiguration: context.rtcConfiguration,
+                signalingAdapter: context.room.signalingAdapter,
                 parentRef: self
               }
             });
-            
-            // Set the peer connection actor on the channel
-            peerChannel.setPeerConnectionActor(peerConnectionActor);
-            
+
+            // Note: Channel is now a simple value object, peer connection access is via Peer
+
             newPeerConnections.set(peerId, peerConnectionActor);
-            
+
             // Start the connection
             peerConnectionActor.send({ type: 'START' });
           }
         }
-        
+
         return newPeerConnections;
       }
     }),
     cleanupDeadPeerConnections: x.assign({
       peerConnections: ({ context, event }) => {
         if (event.type !== 'PRESENCE_EVENTS') return context.peerConnections;
-        
+
         const newPeerConnections = new Map(context.peerConnections);
-        
+
         // Remove connections for peers that left
         for (const presenceEvent of event.data.events) {
           if (presenceEvent.type === 'leave') {
             const peerId = presenceEvent.peerId;
             const peerConnection = newPeerConnections.get(peerId);
-            
+
             if (peerConnection) {
               peerConnection.send({ type: 'CLOSE' });
               newPeerConnections.delete(peerId);
             }
           }
         }
-        
+
         return newPeerConnections;
       }
     }),
     sendMessageToPeer: ({ context, event }) => {
       if (event.type !== 'SEND_MESSAGE_TO_PEER') return;
-      
+
       const peerConnection = context.peerConnections.get(event.peerId);
       if (peerConnection) {
         peerConnection.send({
@@ -184,7 +182,7 @@ export const HoneyRoomConnection = x.setup({
     },
     sendMessageToAll: ({ context, event }) => {
       if (event.type !== 'SEND_MESSAGE_TO_ALL') return;
-      
+
       // Send message to all connected peers
       context.peerConnections.forEach((peerConnection) => {
         peerConnection.send({
@@ -196,7 +194,7 @@ export const HoneyRoomConnection = x.setup({
     },
     sendMessageToDataChannel: ({ context, event }) => {
       if (event.type !== 'SEND_MESSAGE_TO_DATACHANNEL') return;
-      
+
       const peerConnection = context.peerConnections.get(event.peerId);
       if (peerConnection) {
         peerConnection.send({
@@ -208,7 +206,7 @@ export const HoneyRoomConnection = x.setup({
     },
     notifyPeerConnectionEstablished: ({ context, event }) => {
       if (event.type !== 'PEER_CONNECTION_ESTABLISHED') return;
-      
+
       context.parentRef.send({
         type: 'ROOM_PEER_CONNECTED',
         roomId: context.room.id,
@@ -217,7 +215,7 @@ export const HoneyRoomConnection = x.setup({
     },
     notifyPeerConnectionClosed: ({ context, event }) => {
       if (event.type !== 'PEER_CONNECTION_CLOSED') return;
-      
+
       context.parentRef.send({
         type: 'ROOM_PEER_DISCONNECTED',
         roomId: context.room.id,
@@ -226,7 +224,7 @@ export const HoneyRoomConnection = x.setup({
     },
     notifyMessageReceived: ({ context, event }) => {
       if (event.type !== 'PEER_MESSAGE_RECEIVED') return;
-      
+
       context.parentRef.send({
         type: 'ROOM_MESSAGE_RECEIVED',
         roomId: context.room.id,
@@ -250,7 +248,7 @@ export const HoneyRoomConnection = x.setup({
       if (context.presenceSignalActorRef) {
         context.presenceSignalActorRef.send({ type: 'STOP' });
       }
-      
+
       // Close all peer connections
       context.peerConnections.forEach((peerConnection) => {
         peerConnection.send({ type: 'CLOSE' });

@@ -45,7 +45,7 @@ export class PostMessageSignalingAdapter {
   constructor(targetWindow: Window = window.parent, origin: string = '*') {
     this.targetWindow = targetWindow;
     this.origin = origin;
-    
+
     // Listen for messages
     window.addEventListener('message', this.handleMessage.bind(this));
   }
@@ -97,7 +97,7 @@ export class PostMessageSignalingAdapter {
 
   private handlePush(event: SignalingEvent): void {
     const key = this.getKey(event);
-    
+
     if (!this.events.has(key)) {
       this.events.set(key, []);
       this.eventIndexCounter.set(key, 0);
@@ -120,11 +120,12 @@ export class PostMessageSignalingAdapter {
 
   private async sendRequest(type: string, data: any): Promise<any> {
     const requestId = `req-${this.requestCounter++}`;
-    
+
     return new Promise((resolve) => {
       this.pendingRequests.set(requestId, resolve);
-      
+
       this.targetWindow.postMessage({
+        __HONEYPIPE: true,
         type,
         requestId,
         data
@@ -149,7 +150,7 @@ export class PostMessageSignalingAdapter {
       await this.sendRequest('signaling-push', { event });
       return 1; // Return dummy value
     }
-    
+
     // If we're the parent, handle locally
     this.handlePush(event);
     const key = this.getKey(event);
@@ -165,7 +166,7 @@ export class PostMessageSignalingAdapter {
       const response = await this.sendRequest('signaling-pull', { request });
       return response?.events || [];
     }
-    
+
     // If we're the parent, handle locally
     return this.handlePull(request);
   }

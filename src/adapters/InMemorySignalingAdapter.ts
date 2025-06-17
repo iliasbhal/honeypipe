@@ -12,6 +12,7 @@ export class InMemorySignalingAdapter implements SignalingAdapter {
    * Push an event to a channel timeline
    */
   async push(event: SignalingEvent): Promise<number> {
+
     const redisKey = 'channelId' in event
       ? `channel:${event.channelId}:timeline`
       : `room:${event.roomId}:timeline`;
@@ -25,6 +26,7 @@ export class InMemorySignalingAdapter implements SignalingAdapter {
    * Pull all events from a channel timeline since a given offset
    */
   async pull(request: SignalPullRequest): Promise<SignalingEvent[]> {
+
     const redisKey = 'channelId' in request
       ? `channel:${request.channelId}:timeline`
       : `room:${request.roomId}:timeline`;

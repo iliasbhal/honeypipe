@@ -33,10 +33,25 @@ export const RTCDataChannelMachine = x.setup({
       };
 
       dc.onmessage = (event) => {
+        // Try to parse message as JSON to extract metadata
+        let messageData = event.data;
+        let broadcast = false;
+        
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed && typeof parsed === 'object' && 'message' in parsed) {
+            messageData = parsed.message;
+            broadcast = parsed.broadcast || false;
+          }
+        } catch {
+          // If parsing fails, treat as plain string message
+        }
+
         context.parentRef.send({
           type: 'DATA_CHANNEL_MESSAGE',
           label: context.label,
-          data: event.data
+          data: messageData,
+          broadcast: broadcast
         });
       };
 
@@ -61,7 +76,12 @@ export const RTCDataChannelMachine = x.setup({
       
       const dc = context.dataChannel;
       if (dc.readyState === 'open') {
-        dc.send(event.message);
+        // Encode broadcast flag in message
+        const messageToSend = event.broadcast ? 
+          JSON.stringify({ message: event.message, broadcast: true }) :
+          event.message;
+        
+        dc.send(messageToSend);
       }
     },
     cleanup: ({ context }) => {

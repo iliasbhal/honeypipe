@@ -1,9 +1,13 @@
 import * as x from 'xstate';
 import { Room } from '../Room';
+import { Channel } from '../Channel';
 import { Peer } from '../Peer';
+import { SignalingAdapter } from '../adapters/_base';
 
-interface HoneyPresenceSignalContext {
-  room: Room; // Room for presence signaling (join/leave/alive)
+interface HoneyRoomSignalContext {
+  room?: Room; // Room for presence signaling (join/leave/alive)
+  channel?: Channel; // Channel for presence signaling
+  signalingAdapter: SignalingAdapter; // Signaling adapter for push/pull operations
   peer: Peer;
   lastSeenIndex: number;
   currentPollingDelay: number;
@@ -12,8 +16,10 @@ interface HoneyPresenceSignalContext {
   pollCount: number;
 }
 
-interface HoneyPresenceSignalInput {
-  room: Room; // Room for presence signaling (join/leave/alive)
+interface HoneyRoomSignalInput {
+  room?: Room; // Room for presence signaling (join/leave/alive)
+  channel?: Channel; // Channel for presence signaling
+  signalingAdapter?: SignalingAdapter; // Optional signaling adapter (required if using channel)
   peer: Peer;
   parentRef: any;
   aliveInterval?: number; // milliseconds between alive signals, default 30000 (30s)
@@ -24,72 +30,89 @@ export type PresenceEvent =
   | { type: 'leave'; peerId: string }
   | { type: 'alive'; peerId: string };
 
-export const HoneyPresenceSignal = x.setup({
+export const HoneyRoomSignal = x.setup({
   types: {
-    context: {} as HoneyPresenceSignalContext,
+    context: {} as HoneyRoomSignalContext,
     events: {} as any,
-    input: {} as HoneyPresenceSignalInput,
+    input: {} as HoneyRoomSignalInput,
   },
   delays: {
     ALIVE_INTERVAL: ({ context }) => context.aliveInterval,
     POLLING_INTERVAL: ({ context }) => context.currentPollingDelay,
   },
   actors: {
-    presencePolling: x.fromPromise(async ({ input }: { input: HoneyPresenceSignalContext }) => {
-      const { room, lastSeenIndex } = input;
+    signalPolling: x.fromPromise(async ({ input }: { input: HoneyRoomSignalContext }) => {
+      const { room, channel, signalingAdapter, lastSeenIndex } = input;
 
-      // Pull only presence events from signaling adapter
-      const allEvents = await room.signalingAdapter.pull({
+      const allEvents = await signalingAdapter.pull({
         roomId: room.id,
-        offsetIndex: lastSeenIndex
+        offsetIndex: lastSeenIndex,
       });
 
-      // Filter only presence events (join, leave, alive)
-      const presenceEvents = allEvents.filter(event =>
-        event.type === 'join' || event.type === 'leave' || event.type === 'alive'
-      );
-
       return {
-        events: presenceEvents,
+        events: allEvents,
         newLastSeenIndex: lastSeenIndex + allEvents.length // Update index based on all events, not just presence
       };
     }),
   },
   actions: {
     sendJoinEvent: async ({ context }) => {
-      await context.room.signalingAdapter.push({
-        peerId: context.peer.id,
-        roomId: context.room.id,
-        type: 'join'
-      });
+      // Presence events only work with rooms, not channels
+      if (context.room) {
+        await context.signalingAdapter.push({
+          peerId: context.peer.id,
+          roomId: context.room.id,
+          type: 'join'
+        });
+      }
     },
     sendLeaveEvent: async ({ context }) => {
-      await context.room.signalingAdapter.push({
-        peerId: context.peer.id,
-        roomId: context.room.id,
-        type: 'leave'
-      });
+      // Presence events only work with rooms, not channels
+      if (context.room) {
+        await context.signalingAdapter.push({
+          peerId: context.peer.id,
+          roomId: context.room.id,
+          type: 'leave'
+        });
+      }
     },
     sendAliveEvent: async ({ context }) => {
-      await context.room.signalingAdapter.push({
-        peerId: context.peer.id,
-        roomId: context.room.id,
-        type: 'alive'
-      });
+      // Presence events only work with rooms, not channels
+      if (context.room) {
+        await context.signalingAdapter.push({
+          peerId: context.peer.id,
+          roomId: context.room.id,
+          type: 'alive'
+        });
+      }
     },
   },
 }).createMachine({
-  id: 'honeyPresenceSignal',
+  id: 'HoneyRoomSignal',
   initial: 'inactive',
-  context: ({ input }) => ({
-    room: input.room,
-    peer: input.peer,
-    lastSeenIndex: 0,
-    currentPollingDelay: 1000, // Start with 1s polling for presence
-    aliveInterval: input.aliveInterval || 30000, // Default 30s alive interval
-    parentRef: input.parentRef,
-    pollCount: 0,
-  }),
+  context: ({ input }) => {
+    // Validate input - must have either room or channel with signaling adapter
+    if (!input.room && !input.channel) {
+      throw new Error('HoneyRoomSignal requires either a room or channel');
+    }
+    if (input.channel && !input.signalingAdapter) {
+      throw new Error('HoneyRoomSignal requires a signalingAdapter when using channel');
+    }
+
+    const signalingAdapter = input.room ? input.room.signalingAdapter : input.signalingAdapter!;
+
+    return {
+      room: input.room,
+      channel: input.channel,
+      signalingAdapter,
+      peer: input.peer,
+      lastSeenIndex: 0,
+      currentPollingDelay: 1000, // Start with 1s polling for presence
+      aliveInterval: input.aliveInterval || 30000, // Default 30s alive interval
+      parentRef: input.parentRef,
+      pollCount: 0,
+    };
+  },
   states: {
     inactive: {
       on: {
@@ -108,7 +131,7 @@ export const HoneyPresenceSignal = x.setup({
           states: {
             poll: {
               invoke: {
-                src: 'presencePolling',
+                src: 'signalPolling',
                 input: ({ context }) => context,
                 onDone: {
                   target: 'wait',

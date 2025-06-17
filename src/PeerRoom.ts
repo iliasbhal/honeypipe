@@ -63,35 +63,11 @@ export class PeerRoom {
   }
 
   /**
-   * Send a broadcast message to all peers in the room
-   */
-  broadcast(message: string): void {
-    const actor = this.getActor();
-    if (!actor) {
-      throw new Error(`Not connected to room ${this.room.id}`);
-    }
-
-    actor.send({
-      type: 'SEND_MESSAGE_TO_ALL',
-      message: message,
-      broadcast: true
-    });
-  }
-
-  /**
    * Send a message to a specific peer in the room
    */
   sendTo(peerId: string, message: string): void {
-    const actor = this.getActor();
-    if (!actor) {
-      throw new Error(`Not connected to room ${this.room.id}`);
-    }
-
-    actor.send({
-      type: 'SEND_MESSAGE_TO_PEER',
-      peerId: peerId,
-      message: message
-    });
+    // For now, use signaling-based message delivery as fallback
+    this.sendToDataChannel(peerId, 'default', message);
   }
 
   /**
@@ -115,7 +91,7 @@ export class PeerRoom {
    * Get a channel for communication with another peer
    */
   getChannel(otherPeerId: string): Channel {
-    return new Channel(this.room.id, this.peer.peerId, otherPeerId);
+    return new Channel(this.room, this.peer.peerId, otherPeerId);
   }
 
   /**
@@ -123,7 +99,7 @@ export class PeerRoom {
    */
   onMessage(handler: RoomMessageHandler): () => void {
     this.messageHandlers.add(handler);
-    
+
     // Return cleanup function
     return () => {
       this.messageHandlers.delete(handler);
@@ -135,7 +111,7 @@ export class PeerRoom {
    */
   onPresence(handler: RoomPresenceHandler): () => void {
     this.presenceHandlers.add(handler);
-    
+
     // Return cleanup function
     return () => {
       this.presenceHandlers.delete(handler);
@@ -180,4 +156,5 @@ export class PeerRoom {
       }
     });
   }
+
 }

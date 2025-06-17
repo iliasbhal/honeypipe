@@ -2,19 +2,13 @@ import * as x from 'xstate';
 import { Channel } from '../Channel';
 import { Room } from '../Room';
 import { Peer } from '../Peer';
-import { HoneyPresenceSignal } from './HoneyPresenceSignal';
+import { HoneyRoomSignal } from './HoneyRoomSignal';
 import { HoneyPeerConnection } from './HoneyPeerConnection';
-
-// Helper function to generate channel ID for peer-to-peer communication
-function generateChannelId(roomId: string, peerId1: string, peerId2: string): string {
-  const sortedPeerIds = [peerId1, peerId2].sort();
-  return `${roomId}:${sortedPeerIds[0]}-${sortedPeerIds[1]}`;
-}
 
 interface HoneyRoomConnectionContext {
   room: Room; // Room for presence signaling
   localPeer: Peer;
-  presenceSignalActorRef?: any;
+  presenceSignalActorRef: x.ActorRefFromLogic<typeof HoneyRoomSignal>;
   peerConnections: Map<string, any>; // peerId -> HoneyPeerConnection actor ref
   alivePeers: Set<string>; // Set of peer IDs that are currently alive
   parentRef: any;
@@ -45,7 +39,7 @@ export const HoneyRoomConnection = x.setup({
     input: {} as HoneyRoomConnectionInput,
   },
   actors: {
-    honeyPresenceSignal: HoneyPresenceSignal,
+    HoneyRoomSignal: HoneyRoomSignal,
     honeyPeerConnection: HoneyPeerConnection,
   },
   guards: {
@@ -67,7 +61,7 @@ export const HoneyRoomConnection = x.setup({
   actions: {
     spawnPresenceSignal: x.assign({
       presenceSignalActorRef: ({ context, spawn, self }) => {
-        return spawn('honeyPresenceSignal', {
+        return spawn('HoneyRoomSignal', {
           id: 'presenceSignal',
           input: {
             room: context.room,
@@ -118,7 +112,7 @@ export const HoneyRoomConnection = x.setup({
             }
 
             // Create a dedicated channel for this peer-to-peer connection
-            const peerChannel = new Channel(context.room.id, context.localPeer.id, peerId);
+            const peerChannel = new Channel(context.room, context.localPeer.id, peerId);
 
             // Spawn new peer connection
             const peerConnectionActor = spawn('honeyPeerConnection', {
@@ -237,7 +231,7 @@ export const HoneyRoomConnection = x.setup({
       // Forward presence events to parent for handling
       for (const presenceEvent of event.data.events) {
         if (presenceEvent.peerId === context.localPeer.id) continue; // Skip our own events
-        
+
         context.parentRef.send({
           type: 'ROOM_PRESENCE_EVENT',
           roomId: context.room.id,

@@ -135,6 +135,7 @@ export const RTCPeerConnectionMachine = x.setup({
       }
     }),
     notifyOfferCreated: ({ event, context }) => {
+      console.log('notifyOfferCreated', event);
       context.parentRef.send({
         type: 'RTC_OFFER_CREATED',
         offer: (event as any).output
@@ -168,7 +169,8 @@ export const RTCPeerConnectionMachine = x.setup({
       if (dataChannelActor) {
         dataChannelActor.send({
           type: 'SEND_MESSAGE',
-          message: event.message
+          message: event.message,
+          broadcast: false,
         });
       }
     },

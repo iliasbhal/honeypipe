@@ -63,30 +63,18 @@ export class PeerChannel<MessageType = any> {
    * Send a message to the other peer
    */
   send(message: string): void {
-    const actor = this.getActor();
-    if (actor) {
-      // Direct peer connection available
-      actor.send({
-        type: 'SEND_MESSAGE',
-        message: message
-      });
+    // Use signaling-based messaging as fallback
+    const otherPeerId = this.channel.getOtherPeerId(this.peer.peerId);
+    if (!otherPeerId) {
+      throw new Error(`Cannot determine target peer for channel ${this.channel.id}`);
+    }
+
+    // Get the room and use its signaling-based messaging
+    const peerRoom = (this.peer as any).peerRooms?.get(this.channel.roomId);
+    if (peerRoom) {
+      peerRoom.sendChannelMessageViaSignaling(otherPeerId, message);
     } else {
-      // Fallback to room-based messaging
-      const roomActor = this.peer.getRoomConnectionActor(this.channel.roomId);
-      if (!roomActor) {
-        throw new Error(`Not connected to room ${this.channel.roomId} for channel ${this.channel.id}`);
-      }
-
-      const otherPeerId = this.channel.getOtherPeerId(this.peer.peerId);
-      if (!otherPeerId) {
-        throw new Error(`Cannot determine target peer for channel ${this.channel.id}`);
-      }
-
-      roomActor.send({
-        type: 'SEND_MESSAGE_TO_PEER',
-        peerId: otherPeerId,
-        message: message
-      });
+      throw new Error(`Not connected to room ${this.channel.roomId} for channel ${this.channel.id}`);
     }
   }
 

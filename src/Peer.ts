@@ -1,6 +1,5 @@
 import { Room } from './Room';
 import { PeerRoom } from './PeerRoom';
-import { PeerChannel } from './PeerChannel';
 
 export interface PeerOptions {
   peerId: string;
@@ -20,13 +19,10 @@ const uuid = () => {
  */
 export class Peer {
   static Room = Room;
-  static Channel = PeerChannel;
   static PeerRoom = PeerRoom;
-  static PeerChannel = PeerChannel;
 
   readonly peerId: string;
   private peerRooms = new WeakMap<Room, PeerRoom>(); // roomId -> PeerRoom instance
-  private peerChannels = new WeakMap<PeerRoom, PeerChannel>(); // channelId -> PeerChannel instance
 
   constructor(options?: PeerOptions) {
     this.peerId = options?.peerId || uuid();

@@ -12,11 +12,4 @@ export class Room {
     this.id = id;
     this.signalingAdapter = signalingAdapter;
   }
-
-  /**
-   * Get RTC configuration from the signaling adapter
-   */
-  getRtcConfiguration(): RTCConfiguration {
-    return this.signalingAdapter.getRtcConfiguration();
-  }
 }

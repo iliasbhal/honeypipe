@@ -1,9 +1,11 @@
 import { Peer } from './Peer';
 import { Room } from './Room';
-import { Channel } from './Channel';
+import { SignalingEvent } from './adapters/RedisSignalingAdapter';
+import { PeerChannel } from './PeerChannel';
+import { wait } from './utils/wait';
 
 export type RoomMessageHandler = (message: string, fromPeerId: string) => void;
-export type RoomPresenceHandler = (event: { type: 'join' | 'leave' | 'alive'; peerId: string; roomId: string }) => void;
+export type RoomPresenceHandler = (event: SignalingEvent) => void;
 
 /**
  * PeerRoom provides room-specific operations for a peer
@@ -14,10 +16,117 @@ export class PeerRoom {
   private room: Room;
   private messageHandlers: Set<RoomMessageHandler> = new Set();
   private presenceHandlers: Set<RoomPresenceHandler> = new Set();
+  private peerChannels = new Map<string, PeerChannel>();
 
   constructor(peer: Peer, room: Room) {
     this.peer = peer;
     this.room = room;
+  }
+
+  static createPeerSignalLoop() {
+    return {
+      started: false,
+      abortController: new AbortController(),
+      joinSignalCount: 0,
+      pullOffsetIndex: 0,
+    };
+  }
+
+
+  peerSingalLoop = PeerRoom.createPeerSignalLoop()
+
+  private startPeerSignalLoop() {
+    if (this.peerSingalLoop.started) {
+      return;
+    }
+
+    this.peerSingalLoop = PeerRoom.createPeerSignalLoop();
+    this.peerSingalLoop.started = true;
+    const abortSignal = this.peerSingalLoop.abortController.signal;
+
+    // Keep sending join/alive signals
+    Promise.resolve().then(async () => {
+      while (!abortSignal.aborted) {
+        const isJoin = this.peerSingalLoop.joinSignalCount === 0;
+
+        this.peerSingalLoop.joinSignalCount += 1;
+        this.room.signalingAdapter.push({
+          roomId: this.room.id,
+          peerId: this.peer.id,
+          type: isJoin ? 'join' : 'alive',
+        })
+
+        await wait(5000);
+      }
+    })
+
+    // Keep pulling events from the room
+    // To ensure we know who is in the room
+    // In order to create direct webRTC connections
+    // with each member of the room
+    Promise.resolve().then(async () => {
+      let waitTime = 100; // Start with 100ms wait
+      const maxWaitTime = 5000; // Cap at 5 seconds
+
+      while (!abortSignal.aborted) {
+        const events = await this.room.signalingAdapter.pull({
+          roomId: this.room.id,
+          offsetIndex: this.peerSingalLoop.pullOffsetIndex,
+        });
+
+        for (const event of events) {
+          this.processSignalingEvent(event);
+          this.peerSingalLoop.pullOffsetIndex += 1;
+        }
+
+        const hasEvents = events.length > 0;
+        waitTime = hasEvents ? 100 : Math.min(waitTime * 2, maxWaitTime);
+        await wait(waitTime);
+      }
+    })
+  }
+
+  private stopPeerSignalLoop() {
+    this.peerSingalLoop.abortController.abort();
+    this.peerSingalLoop.started = false;
+  }
+
+  processSignalingEvent(event: SignalingEvent) {
+    const isSelfEvent = event.peerId === this.peer.id;
+    const isJoinOrAlive = event.type === 'join' || event.type === 'alive';
+
+    if (isSelfEvent) {
+      return;
+    }
+
+    if (isJoinOrAlive) {
+      const peerChannelId = PeerChannel.getChannelId(this.peer.id, event.peerId, this.room);
+      if (!this.peerChannels.has(peerChannelId)) {
+        const peerChannel = new PeerChannel({
+          room: this.room,
+          peer: this.peer,
+          otherPeerId: event.peerId,
+        });
+
+        this.peerChannels.set(peerChannelId, peerChannel);
+      }
+
+      const peerChannel = this.peerChannels.get(peerChannelId);
+      peerChannel.startPeerSignalLoop();
+
+      // this.presenceHandlers.forEach((handler) => {
+      //   handler(event);
+      // });
+    }
+  }
+
+  onPresenceChange(handler: RoomPresenceHandler) {
+    this.presenceHandlers.add(handler);
+    return {
+      dispose: () => {
+        this.presenceHandlers.delete(handler);
+      }
+    }
   }
 
   /**
@@ -35,126 +144,17 @@ export class PeerRoom {
   }
 
   /**
-   * Get the room connection actor
-   */
-  getActor(): any {
-    return this.peer.getRoomConnectionActor(this.room.id);
-  }
-
-  /**
-   * Check if connected to this room
-   */
-  isConnected(): boolean {
-    return !!this.getActor();
-  }
-
-  /**
    * Join the room
    */
-  async join(): Promise<void> {
-    await this.peer.joinRoom(this.room);
+  join() {
+    this.startPeerSignalLoop();
+    return;
   }
 
   /**
    * Leave the room
    */
-  async leave(): Promise<void> {
-    await this.peer.leaveRoom(this.room);
+  leave() {
+    this.stopPeerSignalLoop();
   }
-
-  /**
-   * Send a message to a specific peer in the room
-   */
-  sendTo(peerId: string, message: string): void {
-    // For now, use signaling-based message delivery as fallback
-    this.sendToDataChannel(peerId, 'default', message);
-  }
-
-  /**
-   * Send a message to a specific data channel of a peer
-   */
-  sendToDataChannel(peerId: string, label: string, message: string): void {
-    const actor = this.getActor();
-    if (!actor) {
-      throw new Error(`Not connected to room ${this.room.id}`);
-    }
-
-    actor.send({
-      type: 'SEND_MESSAGE_TO_DATACHANNEL',
-      peerId: peerId,
-      label: label,
-      message: message
-    });
-  }
-
-  /**
-   * Get a channel for communication with another peer
-   */
-  getChannel(otherPeerId: string): Channel {
-    return new Channel(this.room, this.peer.peerId, otherPeerId);
-  }
-
-  /**
-   * Register a handler for incoming room messages
-   */
-  onMessage(handler: RoomMessageHandler): () => void {
-    this.messageHandlers.add(handler);
-
-    // Return cleanup function
-    return () => {
-      this.messageHandlers.delete(handler);
-    };
-  }
-
-  /**
-   * Register a handler for room presence updates
-   */
-  onPresence(handler: RoomPresenceHandler): () => void {
-    this.presenceHandlers.add(handler);
-
-    // Return cleanup function
-    return () => {
-      this.presenceHandlers.delete(handler);
-    };
-  }
-
-  /**
-   * Get connected peer IDs in this room
-   */
-  getConnectedPeerIds(): string[] {
-    const actor = this.getActor();
-    if (!actor) {
-      return [];
-    }
-
-    const snapshot = actor.getSnapshot();
-    return Array.from(snapshot.context.alivePeers || new Set());
-  }
-
-  /**
-   * Notify message handlers (called by Peer)
-   */
-  notifyMessageHandlers(message: string, fromPeerId: string): void {
-    this.messageHandlers.forEach(handler => {
-      try {
-        handler(message, fromPeerId);
-      } catch (error) {
-        console.error(`[PeerRoom ${this.room.id}] Error in message handler:`, error);
-      }
-    });
-  }
-
-  /**
-   * Notify presence handlers (called by Peer)
-   */
-  notifyPresenceHandlers(event: { type: 'join' | 'leave' | 'alive'; peerId: string; roomId: string }): void {
-    this.presenceHandlers.forEach(handler => {
-      try {
-        handler(event);
-      } catch (error) {
-        console.error(`[PeerRoom ${this.room.id}] Error in presence handler:`, error);
-      }
-    });
-  }
-
 }

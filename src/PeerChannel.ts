@@ -1,5 +1,7 @@
+import { SignalingEvent } from './adapters/RedisSignalingAdapter';
 import { Peer } from './Peer';
-import { Channel } from './Channel';
+import { Room } from './Room';
+import { wait } from './utils/wait';
 
 export type ChannelMessageHandler = (message: string, fromPeerId: string) => void;
 
@@ -10,143 +12,210 @@ export type ChannelMessageHandler = (message: string, fromPeerId: string) => voi
 export class PeerChannel<MessageType = any> {
   __type!: MessageType;
   private peer: Peer;
-  private channel: Channel<MessageType>;
+  private room: Room;
+  private otherPeerId: string;
   private messageHandlers: Set<ChannelMessageHandler> = new Set();
 
-  constructor(peer: Peer, channel: Channel<MessageType>) {
-    this.peer = peer;
-    this.channel = channel;
+  private peerConnection: RTCPeerConnection | null = null;
+  private dataChannel: RTCDataChannel | null = null;
+  private signalingEvents: SignalingEvent[] = [];
+
+  static getChannelId(peerId1: string, peerId2: string, room: Room) {
+    const sortedPeerIds = [peerId1, peerId2].sort();
+    return `${room.id}:${sortedPeerIds[0]}-${sortedPeerIds[1]}`;
+  }
+
+  constructor(config: { room: Room, peer: Peer, otherPeerId: string }) {
+    this.peer = config.peer;
+    this.otherPeerId = config.otherPeerId;
+    this.room = config.room;
   }
 
   /**
    * Get the channel ID
    */
   get id(): string {
-    return this.channel.id;
+    return PeerChannel.getChannelId(this.peer.id, this.otherPeerId, this.room);
+  }
+
+
+  /**
+ * Join the room
+ */
+  join() {
+    this.startPeerSignalLoop();
+    return;
   }
 
   /**
-   * Get the underlying channel
+   * Leave the room
    */
-  getChannel(): Channel<MessageType> {
-    return this.channel;
+  leave() {
+    this.stopPeerSignalLoop();
   }
 
-  /**
-   * Get the peer connection actor for this channel
-   */
-  getActor(): any {
-    // First check if we have a room connection for this channel
-    const roomActor = this.peer.getRoomConnectionActor(this.channel.roomId);
-    if (!roomActor) {
-      return null;
-    }
-
-    // Get the peer connection from the room connection
-    const snapshot = roomActor.getSnapshot();
-    const otherPeerId = this.channel.getOtherPeerId(this.peer.peerId);
-    if (!otherPeerId) {
-      return null;
-    }
-
-    return snapshot.context.peerConnections?.get(otherPeerId);
-  }
-
-  /**
-   * Check if connected to the other peer
-   */
-  isConnected(): boolean {
-    return !!this.getActor();
-  }
-
-  /**
-   * Send a message to the other peer
-   */
-  send(message: string): void {
-    // Use signaling-based messaging as fallback
-    const otherPeerId = this.channel.getOtherPeerId(this.peer.peerId);
-    if (!otherPeerId) {
-      throw new Error(`Cannot determine target peer for channel ${this.channel.id}`);
-    }
-
-    // Get the room and use its signaling-based messaging
-    const peerRoom = (this.peer as any).peerRooms?.get(this.channel.roomId);
-    if (peerRoom) {
-      peerRoom.sendChannelMessageViaSignaling(otherPeerId, message);
-    } else {
-      throw new Error(`Not connected to room ${this.channel.roomId} for channel ${this.channel.id}`);
-    }
-  }
-
-  /**
-   * Send a message to a specific data channel
-   */
-  sendToDataChannel(label: string, message: string): void {
-    const actor = this.getActor();
-    if (actor) {
-      // Direct peer connection available
-      actor.send({
-        type: 'SEND_DATA_CHANNEL_MESSAGE',
-        label: label,
-        message: message
-      });
-    } else {
-      // Fallback to room-based messaging
-      const roomActor = this.peer.getRoomConnectionActor(this.channel.roomId);
-      if (!roomActor) {
-        throw new Error(`Not connected to room ${this.channel.roomId} for channel ${this.channel.id}`);
-      }
-
-      const otherPeerId = this.channel.getOtherPeerId(this.peer.peerId);
-      if (!otherPeerId) {
-        throw new Error(`Cannot determine target peer for channel ${this.channel.id}`);
-      }
-
-      roomActor.send({
-        type: 'SEND_MESSAGE_TO_DATACHANNEL',
-        peerId: otherPeerId,
-        label: label,
-        message: message
-      });
-    }
-  }
-
-  /**
-   * Register a handler for incoming channel messages
-   */
-  onMessage(handler: ChannelMessageHandler): () => void {
-    this.messageHandlers.add(handler);
-    
-    // Return cleanup function
-    return () => {
-      this.messageHandlers.delete(handler);
+  static createPeerSignalLoop() {
+    return {
+      started: false,
+      abortController: new AbortController(),
+      offerSignalCount: 0,
+      pullOffsetIndex: 0,
     };
   }
 
-  /**
-   * Notify message handlers (called by Peer)
-   */
-  notifyMessageHandlers(message: string, fromPeerId: string): void {
-    this.messageHandlers.forEach(handler => {
-      try {
-        handler(message, fromPeerId);
-      } catch (error) {
-        console.error(`[PeerChannel ${this.channel.id}] Error in message handler:`, error);
+  getChannelPeerConnection() {
+    if (this.peerConnection) return this.peerConnection;
+
+    const rtcConfiguration = this.room.signalingAdapter.getRtcConfiguration()
+    this.peerConnection = new RTCPeerConnection(rtcConfiguration);
+
+    this.peerConnection.onicecandidate = (event) => {
+      this.room.signalingAdapter.push({
+        peerId: this.peer.id,
+        channelId: this.id,
+        type: 'iceCandidate',
+        data: event.candidate,
+      });
+    }
+
+
+    return this.peerConnection;
+  }
+
+
+  peerSingalLoop = PeerChannel.createPeerSignalLoop();
+
+  isInitiator() {
+
+  }
+
+  startPeerSignalLoop() {
+    if (this.peerSingalLoop.started) {
+      return;
+    }
+
+    this.peerSingalLoop = PeerChannel.createPeerSignalLoop();
+    this.peerSingalLoop.started = true;
+    const abortSignal = this.peerSingalLoop.abortController.signal;
+
+    // Keep sending join/alive signals
+    Promise.resolve().then(async () => {
+
+      if (this.peer.id === 'Alice') {
+        this.sendSdpOffer();
       }
+    })
+
+    // Keep pulling events from the room
+    // To ensure we know who is in the room
+    // In order to create direct webRTC connections
+    // with each member of the room
+    Promise.resolve().then(async () => {
+      let waitTime = 100; // Start with 100ms wait
+      const maxWaitTime = 5000; // Cap at 5 seconds
+
+      while (!abortSignal.aborted) {
+        const events = await this.room.signalingAdapter.pull({
+          channelId: this.id,
+          offsetIndex: this.peerSingalLoop.pullOffsetIndex,
+        });
+
+        for (const event of events) {
+          this.signalingEvents.push(event);
+          this.processSignalingEvent(event);
+          this.peerSingalLoop.pullOffsetIndex += 1;
+        }
+
+        const hasEvents = events.length > 0;
+        waitTime = hasEvents ? 100 : Math.min(waitTime * 2, maxWaitTime);
+        await wait(waitTime);
+      }
+    })
+  }
+
+  private stopPeerSignalLoop() {
+    this.peerSingalLoop.abortController.abort();
+    this.peerSingalLoop.started = false;
+  }
+
+  setupDataChannel(dataChannel: RTCDataChannel) {
+    this.dataChannel = dataChannel;
+
+    dataChannel.onmessage = (event) => {
+      console.log(this.peer.id, 'dataChannel.onmessage', event);
+    }
+    dataChannel.onopen = () => {
+      console.log(this.peer.id, 'dataChannel.onopen');
+    }
+    dataChannel.onclose = () => {
+      console.log(this.peer.id, 'dataChannel.onclose');
+    }
+  }
+
+  async processSignalingEvent(event: SignalingEvent) {
+    const isOwnEvent = event.peerId === this.peer.id;
+    if (isOwnEvent) return;
+
+    if (event.type === 'iceCandidate') return this.handleIceCandidate(event.data);
+    if (event.type === 'sdpOffer') return this.handleSdpOffer(event.data);
+    if (event.type === 'sdpAnswer') return this.handleSdpAnswer(event.data);
+  }
+
+  async sendSdpOffer() {
+    console.log(this.peer.id, 'sendSdpOffer');
+    const peerConnection = this.getChannelPeerConnection();
+    const datachannel = peerConnection.createDataChannel('default');
+    this.setupDataChannel(datachannel);
+
+    const offer = await peerConnection.createOffer({});
+    peerConnection.setLocalDescription(offer);
+
+    this.room.signalingAdapter.push({
+      peerId: this.peer.id,
+      channelId: this.id,
+      type: 'sdpOffer',
+      data: offer,
+    })
+  }
+
+  async handleIceCandidate(iceCandidate: RTCIceCandidateInit) {
+    console.log(this.peer.id, 'handle iceCandidate', typeof iceCandidate, !!iceCandidate);
+    const peerConnection = this.getChannelPeerConnection();
+
+    if (iceCandidate) {
+      peerConnection.addIceCandidate(iceCandidate);
+    }
+
+    console.log(this.peer.id, 'handle iceCandidate done');
+  }
+
+  async handleSdpOffer(sdpOffer: RTCSessionDescriptionInit) {
+    console.log(this.peer.id, 'handle sdpOffer');
+    const peerConnection = this.getChannelPeerConnection();
+    peerConnection.setRemoteDescription(sdpOffer);
+
+    const answer = await peerConnection.createAnswer({});
+    peerConnection.setLocalDescription(answer);
+
+    peerConnection.ondatachannel = (event) => {
+      this.setupDataChannel(event.channel);
+    }
+
+    this.room.signalingAdapter.push({
+      peerId: this.peer.id,
+      channelId: this.id,
+      type: 'sdpAnswer',
+      data: answer,
     });
+
+    console.log(this.peer.id, 'handle sdpOffer done');
   }
 
-  /**
-   * Get the other peer ID in this channel
-   */
-  getOtherPeerId(): string | null {
-    return this.channel.getOtherPeerId(this.peer.peerId);
+  async handleSdpAnswer(sdpAnswer: RTCSessionDescriptionInit) {
+    console.log(this.peer.id, 'handle sdpAnswer');
+    const peerConnection = this.getChannelPeerConnection();
+    peerConnection.setRemoteDescription(sdpAnswer);
+    console.log(this.peer.id, 'handle sdpAnswer done');
   }
 
-  /**
-   * Get both peer IDs in this channel
-   */
-  getPeerIds(): readonly [string, string] {
-    return this.channel.peerIds;
-  }
 }

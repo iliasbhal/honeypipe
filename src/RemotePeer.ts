@@ -3,8 +3,9 @@ import { Peer } from './Peer';
 import { PeerRoom } from './PeerRoom';
 import { Room } from './Room';
 import { wait } from './utils/wait';
+import * as superJSON from 'superjson'
 
-export type ChannelMessageHandler = (message: { from: RemotePeer, content: string }) => void;
+export type ChannelMessageHandler<Msg> = (message: { fromPeer: RemotePeer, message: Msg }) => void;
 
 /**
  * RemotePeer provides channel-specific operations for a peer
@@ -15,7 +16,6 @@ export class RemotePeer<MessageType = any> {
   private peerRoom: PeerRoom;
   private localPeerId: string;
   private otherPeerId: string;
-  private messageHandlers: Set<ChannelMessageHandler> = new Set();
 
   private peerConnection: RTCPeerConnection | null = null;
   private dataChannel: RTCDataChannel | null = null;
@@ -38,6 +38,9 @@ export class RemotePeer<MessageType = any> {
     this.localPeerId = config.localPeerId;
     this.otherPeerId = config.otherPeerId;
     this.peerRoom = config.peerRoom;
+
+    this.getChannelPeerConnection();
+    console.log('PEER CONSTRUCTOR', this.localPeerId, this.otherPeerId);
   }
 
   /**
@@ -47,12 +50,15 @@ export class RemotePeer<MessageType = any> {
     return this.otherPeerId;
   }
 
+  get room(): Room {
+    return this.peerRoom.room;
+  }
+
   /**
    * Get the channel ID
    */
   get channelId(): string {
-    const room = this.peerRoom.getRoom();
-    return RemotePeer.getChannelId(this.localPeerId, this.otherPeerId, room.id);
+    return RemotePeer.getChannelId(this.localPeerId, this.otherPeerId, this.room.id);
   }
 
 
@@ -83,13 +89,13 @@ export class RemotePeer<MessageType = any> {
   getChannelPeerConnection() {
     if (this.peerConnection) return this.peerConnection;
 
-    const room = this.peerRoom.getRoom();
-
-    const rtcConfiguration = room.signalingAdapter.getRtcConfiguration()
+    const rtcConfiguration = this.room.signalingAdapter.getRtcConfiguration()
     this.peerConnection = new RTCPeerConnection(rtcConfiguration);
 
     this.peerConnection.onicecandidate = (event) => {
-      room.signalingAdapter.push({
+      if (!event.candidate) return;
+
+      this.room.signalingAdapter.push({
         peerId: this.localPeerId,
         channelId: this.channelId,
         type: 'iceCandidate',
@@ -97,12 +103,22 @@ export class RemotePeer<MessageType = any> {
       });
     }
 
+    this.peerConnection.onconnectionstatechange = (event) => {
+      console.log(this.localPeerId, '/', this.otherPeerId, 'onconnectionstatechange', this.peerConnection?.connectionState);
+    }
+
 
     return this.peerConnection;
   }
 
-  sendMessage(message: string) {
-    this.dataChannel?.send(message);
+  sendMessage(message: MessageType) {
+    const serialized = superJSON.stringify(message);
+    if (!this.dataChannel) {
+      throw new Error('Data channel not ready!');
+    }
+
+    this.dataChannel.send(serialized);
+    this.emitMessage(this.localPeerId, serialized);
   }
 
   peerSingalLoop = RemotePeer.createPeerSignalLoop();
@@ -140,8 +156,7 @@ export class RemotePeer<MessageType = any> {
       const maxWaitTime = 5000; // Cap at 5 seconds
 
       while (!abortSignal.aborted) {
-        const room = this.peerRoom.getRoom();
-        const events = await room.signalingAdapter.pull({
+        const events = await this.room.signalingAdapter.pull({
           channelId: this.channelId,
           offsetIndex: this.peerSingalLoop.pullOffsetIndex,
         });
@@ -164,23 +179,25 @@ export class RemotePeer<MessageType = any> {
     this.peerSingalLoop.started = false;
   }
 
+  emitMessage(peerId: string, rawMessage: string) {
+
+    console.log('--------------------------------');
+    const peer = this.peerRoom.getPeer(peerId)
+
+    console.log('emitMessage', !!peer, peerId, rawMessage);
+    const message = superJSON.parse(rawMessage) as MessageType;
+    this.room.emit('message', {
+      peer: peer,
+      message,
+    });
+  }
+
   setupDataChannel(dataChannel: RTCDataChannel) {
     this.dataChannel = dataChannel;
 
     dataChannel.onmessage = (event) => {
-      const message = {
-        from: this,
-        content: event.data,
-      };
-
-      this.peerRoom.handleMessage(message);
-      this.messageHandlers.forEach(handler => {
-        handler({
-          from: this,
-          content: event.data,
-        });
-      });
       console.log(this.localPeerId, 'dataChannel.onmessage', event);
+      this.emitMessage(this.otherPeerId, event.data);
     }
     dataChannel.onopen = () => {
       console.log(this.localPeerId, 'dataChannel.onopen');
@@ -188,10 +205,16 @@ export class RemotePeer<MessageType = any> {
     dataChannel.onclose = () => {
       console.log(this.localPeerId, 'dataChannel.onclose');
     }
+    dataChannel.onerror = (event) => {
+      console.log(this.localPeerId, 'dataChannel.onerror', event);
+    }
+
+    dataChannel.onclosing = (event) => {
+      console.log(this.localPeerId, 'dataChannel.onclosing', event);
+    }
   }
 
   async processSignalingEvent(event: SignalingEvent) {
-    console.log(this.localPeerId, 'processSignalingEvent', event);
     const isOwnEvent = event.peerId === this.localPeerId;
     if (isOwnEvent) return;
 
@@ -201,7 +224,7 @@ export class RemotePeer<MessageType = any> {
   }
 
   async sendSdpOffer() {
-    console.log(this.localPeerId, 'sendSdpOffer');
+    // console.log(this.localPeerId, 'sendSdpOffer', this.otherPeerId);
     const peerConnection = this.getChannelPeerConnection();
     const datachannel = peerConnection.createDataChannel('default');
     this.setupDataChannel(datachannel);
@@ -209,8 +232,7 @@ export class RemotePeer<MessageType = any> {
     const offer = await peerConnection.createOffer({});
     peerConnection.setLocalDescription(offer);
 
-    const room = this.peerRoom.getRoom();
-    room.signalingAdapter.push({
+    this.room.signalingAdapter.push({
       peerId: this.localPeerId,
       channelId: this.channelId,
       type: 'sdpOffer',
@@ -219,18 +241,18 @@ export class RemotePeer<MessageType = any> {
   }
 
   async handleIceCandidate(iceCandidate: RTCIceCandidateInit) {
-    console.log(this.localPeerId, 'handle iceCandidate', typeof iceCandidate, !!iceCandidate);
+    // console.log(this.localPeerId, 'handle iceCandidate', this.otherPeerId);
     const peerConnection = this.getChannelPeerConnection();
 
     if (iceCandidate) {
       peerConnection.addIceCandidate(iceCandidate);
     }
 
-    console.log(this.localPeerId, 'handle iceCandidate done');
+    // console.log(this.localPeerId, 'handle iceCandidate done');
   }
 
   async handleSdpOffer(sdpOffer: RTCSessionDescriptionInit) {
-    console.log(this.localPeerId, 'handle sdpOffer');
+    console.log(this.localPeerId, 'handle sdpOffer', this.otherPeerId);
     const peerConnection = this.getChannelPeerConnection();
     peerConnection.setRemoteDescription(sdpOffer);
 
@@ -238,25 +260,25 @@ export class RemotePeer<MessageType = any> {
     peerConnection.setLocalDescription(answer);
 
     peerConnection.ondatachannel = (event) => {
+      console.log(this.localPeerId, 'ondatachannel', this.otherPeerId);
       this.setupDataChannel(event.channel);
     }
 
-    const room = this.peerRoom.getRoom();
-    room.signalingAdapter.push({
+    this.room.signalingAdapter.push({
       peerId: this.localPeerId,
       channelId: this.channelId,
       type: 'sdpAnswer',
       data: answer,
     });
 
-    console.log(this.localPeerId, 'handle sdpOffer done');
+    // console.log(this.localPeerId, 'handle sdpOffer done');
   }
 
   async handleSdpAnswer(sdpAnswer: RTCSessionDescriptionInit) {
-    console.log(this.localPeerId, 'handle sdpAnswer');
+    // console.log(this.localPeerId, 'handle sdpAnswer', this.otherPeerId);
     const peerConnection = this.getChannelPeerConnection();
     peerConnection.setRemoteDescription(sdpAnswer);
-    console.log(this.localPeerId, 'handle sdpAnswer done');
+    // console.log(this.localPeerId, 'handle sdpAnswer done');
   }
 
 }

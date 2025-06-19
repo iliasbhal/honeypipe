@@ -23,6 +23,7 @@
     "motion": "^12.16.0",
     "nuqs": "^2.4.3",
     "simple-peer": "^9.11.1",
+    "superjson": "^2.2.2",
     "xstate": "^5.19.4"
   },
   "devDependencies": {

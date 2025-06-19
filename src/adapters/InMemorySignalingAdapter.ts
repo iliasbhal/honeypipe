@@ -61,9 +61,6 @@ export class InMemorySignalingAdapter implements SignalingAdapter {
           ]
         }
       ],
-      iceCandidatePoolSize: 10,
-      bundlePolicy: 'balanced',
-      rtcpMuxPolicy: 'require'
     };
   }
 }

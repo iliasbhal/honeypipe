@@ -1,41 +1,18 @@
-import Redis from 'ioredis-mock';
+import Redis from 'ioredis';
+import { SignalingEvent, SignalingAdapter, SignalPullRequest } from './_base';
 
-export type SignalingEvent = {
-  peerId: string;
-  roomId: string;
-  type: 'join' | 'leave' | 'alive';
-} | {
-  peerId: string;
-  channelId: string;
-  type: 'sdpOffer' | 'sdpAnswer';
-  data: RTCSessionDescriptionInit;
-} | {
-  peerId: string;
-  channelId: string;
-  type: 'iceCandidate';
-  data: RTCIceCandidateInit;
-}
+export class InMemorySignalingAdapter implements SignalingAdapter {
+  private redis: InstanceType<typeof Redis>;
 
-type SignalPullRequest = {
-  roomId: string;
-  offsetIndex: number;
-} | {
-  channelId: string;
-  offsetIndex: number;
-}
-
-export class RedisSignalingAdapter {
-  private redis: Redis;
-
-  constructor(redisConfig?: any) {
-    // Use ioredis-mock for testing/development
-    this.redis = new Redis(redisConfig);
+  constructor() {
+    this.redis = new Redis();
   }
 
   /**
    * Push an event to a channel timeline
    */
   async push(event: SignalingEvent): Promise<number> {
+
     const redisKey = 'channelId' in event
       ? `channel:${event.channelId}:timeline`
       : `room:${event.roomId}:timeline`;
@@ -49,11 +26,12 @@ export class RedisSignalingAdapter {
    * Pull all events from a channel timeline since a given offset
    */
   async pull(request: SignalPullRequest): Promise<SignalingEvent[]> {
+
     const redisKey = 'channelId' in request
       ? `channel:${request.channelId}:timeline`
       : `room:${request.roomId}:timeline`;
 
-    // Get events from the list
+    // Get events from the list (in reverse order since lpush puts newest first)
     const offsetIndex = request.offsetIndex || 0;
     const eventStrings = await this.redis.lrange(redisKey, offsetIndex, -1);
 
@@ -83,8 +61,8 @@ export class RedisSignalingAdapter {
           ]
         }
       ],
-      iceCandidatePoolSize: 10,
-      bundlePolicy: 'max-bundle',
+      iceCandidatePoolSize: 5,
+      bundlePolicy: 'balanced',
       rtcpMuxPolicy: 'require'
     };
   }

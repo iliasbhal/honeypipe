@@ -51,8 +51,7 @@ export class Peer {
    */
   join(room: Room): PeerRoom {
     const peerRoom = this.in(room);
-    peerRoom.join();
-    return peerRoom;
+    return peerRoom.join();
   }
 
   /**
@@ -60,6 +59,6 @@ export class Peer {
    */
   leave(room: Room) {
     const peerRoom = this.in(room);
-    peerRoom.leave();
+    return peerRoom.leave();
   }
 }

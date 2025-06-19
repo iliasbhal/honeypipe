@@ -11,11 +11,9 @@ export type RoomPresenceHandler = (remotePeer: RemotePeer) => void;
  * PeerRoom provides room-specific operations for a peer
  * Created via peer.via(room)
  */
-export class PeerRoom {
-  private peer: Peer;
-  private room: Room;
-  private messageHandlers: Set<RoomMessageHandler> = new Set();
-  private presenceHandlers: Set<RoomPresenceHandler> = new Set();
+export class PeerRoom<MessageType = any> {
+  peer: Peer;
+  room: Room;
   private remotePeers = new Map<string, RemotePeer>();
 
   constructor(peer: Peer, room: Room) {
@@ -80,9 +78,9 @@ export class PeerRoom {
 
         for (const event of events) {
           this.processSignalingEvent(event);
-          this.peerSingalLoop.pullOffsetIndex += 1;
         }
 
+        this.peerSingalLoop.pullOffsetIndex += events.length;
         const hasEvents = events.length > 0;
         waitTime = hasEvents ? 100 : Math.min(waitTime * 2, maxWaitTime);
         await wait(waitTime);
@@ -96,41 +94,52 @@ export class PeerRoom {
   }
 
   processSignalingEvent(event: SignalingEvent) {
-    const isSelfEvent = event.peerId === this.peer.id;
     const isJoinOrAlive = event.type === 'join' || event.type === 'alive';
+    const isLeave = event.type === 'leave';
 
-    if (isSelfEvent) {
+    const isPresenceEvent = isLeave || isJoinOrAlive;
+    if (!isPresenceEvent) {
       return;
     }
 
-    if (isJoinOrAlive) {
-      const remotePeerId = RemotePeer.getChannelId(this.peer.id, event.peerId, this.room.id);
-      if (!this.remotePeers.has(remotePeerId)) {
-        const remotePeer = new RemotePeer({
-          peerRoom: this,
-          localPeerId: this.peer.id,
-          otherPeerId: event.peerId,
-        });
-
-        this.remotePeers.set(remotePeerId, remotePeer);
-      }
-
-      const remotePeer = this.remotePeers.get(remotePeerId);
-      remotePeer.startPeerSignalLoop();
-
-      this.presenceHandlers.forEach((handler) => {
-        handler(remotePeer);
-      });
+    if (!event.peerId) {
+      console.log('event.peerId', event);
     }
+    const peer = this.getPeer(event.peerId, { createIfNotExists: true });
+    if (peer instanceof RemotePeer) {
+      if (isJoinOrAlive) peer.startPeerSignalLoop();
+    }
+
+    this.room.emit('presence', {
+      peer: peer,
+      type: event.type
+    });
   }
 
-  onPresenceChange(handler: RoomPresenceHandler) {
-    this.presenceHandlers.add(handler);
-    return {
-      dispose: () => {
-        this.presenceHandlers.delete(handler);
-      }
+  getPeer(peerId: string, config?: { createIfNotExists: boolean }): RemotePeer | Peer | undefined {
+    if (peerId === this.peer.id) {
+      console.log('getPeer', peerId, this.peer.id, !!this.peer);
+      return this.peer;
     }
+
+    const remotePeerId = RemotePeer.getChannelId(this.peer.id, peerId, this.room.id);
+    if (!this.remotePeers.has(remotePeerId)) {
+      if (!config?.createIfNotExists) {
+        return undefined;
+      }
+
+      const remotePeer = new RemotePeer({
+        peerRoom: this,
+        localPeerId: this.peer.id,
+        otherPeerId: peerId,
+      });
+
+      this.remotePeers.set(remotePeerId, remotePeer);
+    }
+
+    const remotePeer = this.remotePeers.get(remotePeerId);
+    console.log('getPeer 2', peerId, this.peer.id, !!remotePeer);
+    return remotePeer;
   }
 
   /**
@@ -152,7 +161,7 @@ export class PeerRoom {
    */
   join() {
     this.startPeerSignalLoop();
-    return;
+    return this;
   }
 
   /**
@@ -160,26 +169,27 @@ export class PeerRoom {
    */
   leave() {
     this.stopPeerSignalLoop();
+    this.remotePeers.forEach(remotePeer => {
+      remotePeer.leave();
+    });
+
+    this.remotePeers.clear();
+
+    this.room.signalingAdapter.push({
+      roomId: this.room.id,
+      peerId: this.peer.id,
+      type: 'leave',
+    });
+
+    this.room.emit('presence', {
+      peer: this.peer,
+      type: 'leave',
+    });
   }
 
-  sendMessage(message: string) {
+  sendMessage(message: MessageType) {
     this.getPeers().forEach(remotePeer => {
       remotePeer.sendMessage(message);
     });
-  }
-
-  handleMessage(message: { from: RemotePeer, content: string }) {
-    this.messageHandlers.forEach(handler => {
-      handler(message);
-    });
-  }
-
-  onMessage(handler: RoomMessageHandler) {
-    this.messageHandlers.add(handler);
-    return {
-      dispose: () => {
-        this.messageHandlers.delete(handler);
-      }
-    }
   }
 }

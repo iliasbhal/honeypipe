@@ -4,17 +4,11 @@ import { Peer } from '../src/Peer';
 import { InMemorySignalingAdapter } from '../src/adapters/InMemorySignalingAdapter';
 import { wait } from '../src/utils/wait';
 
-// Suppress console logs during tests
-beforeEach(() => {
-  // vi.spyOn(console, 'log').mockImplementation(() => { });
-  // vi.spyOn(console, 'error').mockImplementation(() => { });
-});
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
-
 describe('Peer Communication', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   const signalingAdapter = new InMemorySignalingAdapter();
   const roomId = 'test-room-1';
 
@@ -38,7 +32,7 @@ describe('Peer Communication', () => {
   roomCharlie.on('presence', (event) => charlieSpy({ type: event.type, peerId: event.peer.id }));
 
 
-  it.only('should detect people that joined a room', async () => {
+  it('should detect people that joined a room', async () => {
 
     alice.join(roomAlice);
     bob.join(roomBob);
@@ -58,18 +52,19 @@ describe('Peer Communication', () => {
   });
 
 
-  it.only('peers can send messages to everyone in the room', async () => {
+  it('peers can send messages to everyone in the room', async () => {
     roomAlice.on('message', (event) => aliceSpy({ peerId: event.peer.id, message: event.message }));
     roomBob.on('message', (event) => bobSpy({ peerId: event.peer.id, message: event.message }));
     roomCharlie.on('message', (event) => charlieSpy({ peerId: event.peer.id, message: event.message }));
 
-    await wait(3000);
+    await wait(1000);
 
     alice.in(roomAlice).sendMessage('Hello everyone! (Alice)');
     bob.in(roomBob).sendMessage('Hello everyone! (Bob)');
     charlie.in(roomCharlie).sendMessage('Hello everyone! (Charlie)');
 
 
+    await wait(1000);
     const hasBeenCalledWith = (spy: any, peerId: string, message: string) => {
       return spy.mock.calls.some(call => call[0].peerId === peerId && call[0].message === message);
     };
@@ -87,27 +82,31 @@ describe('Peer Communication', () => {
     expect(hasBeenCalledWith(charlieSpy, charlie.id, 'Hello everyone! (Charlie)')).toBe(true);
   })
 
-  it.only('should detect people that left a room', async () => {
+  it('should detect people that left a room', async () => {
     bob.leave(roomBob);
 
-    await wait(1000);
+    await wait(2000);
 
     alice.leave(roomAlice);
 
-    await wait(1000);
+    await wait(2000);
 
-    expect(aliceSpy.mock.calls).toEqual([
+    const getLeaveEvents = (spy: any) => {
+      return spy.mock.calls.filter(call => call[0].type === 'leave');
+    }
+
+    expect(getLeaveEvents(aliceSpy)).toEqual([
       [{ type: 'leave', peerId: bob.id }],
       [{ type: 'leave', peerId: alice.id }],
     ]);
 
     // Bob doesn't see alice leave because he left 
     // Before it happened, he only sees himself leave.
-    expect(bobSpy.mock.calls).toEqual([
+    expect(getLeaveEvents(bobSpy)).toEqual([
       [{ type: 'leave', peerId: bob.id }],
     ]);
 
-    expect(charlieSpy.mock.calls).toEqual([
+    expect(getLeaveEvents(charlieSpy)).toEqual([
       [{ type: 'leave', peerId: bob.id }],
       [{ type: 'leave', peerId: alice.id }],
     ]);

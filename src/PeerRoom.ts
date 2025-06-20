@@ -3,6 +3,7 @@ import { Room } from './Room';
 import { SignalingEvent } from './adapters/RedisSignalingAdapter';
 import { RemotePeer } from './RemotePeer';
 import { wait } from './utils/wait';
+import SuperJSON from 'superjson';
 
 export type RoomMessageHandler = (message: { from: RemotePeer, content: string }) => void;
 export type RoomPresenceHandler = (remotePeer: RemotePeer) => void;
@@ -94,6 +95,10 @@ export class PeerRoom<MessageType = any> {
   }
 
   processSignalingEvent(event: SignalingEvent) {
+    if (this.peer.id === 'Alice') {
+      console.log('processSignalingEvent', event);
+    }
+    const peer = this.getPeer(event.peerId, { createIfNotExists: true });
     const isJoinOrAlive = event.type === 'join' || event.type === 'alive';
     const isLeave = event.type === 'leave';
 
@@ -105,7 +110,6 @@ export class PeerRoom<MessageType = any> {
     if (!event.peerId) {
       console.log('event.peerId', event);
     }
-    const peer = this.getPeer(event.peerId, { createIfNotExists: true });
     if (peer instanceof RemotePeer) {
       if (isJoinOrAlive) peer.startPeerSignalLoop();
     }
@@ -190,6 +194,22 @@ export class PeerRoom<MessageType = any> {
   sendMessage(message: MessageType) {
     this.getPeers().forEach(remotePeer => {
       remotePeer.sendMessage(message);
+    });
+
+    const serialized = SuperJSON.stringify(message);
+    this.emitMessage(this.peer.id, serialized);
+  }
+
+  emitMessage(peerId: string, rawMessage: string) {
+
+    console.log('--------------------------------');
+    const peer = this.getPeer(peerId)
+
+    console.log('emitMessage', !!peer, peerId, rawMessage);
+    const message = SuperJSON.parse(rawMessage) as MessageType;
+    this.room.emit('message', {
+      peer: peer,
+      message,
     });
   }
 }

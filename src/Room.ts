@@ -1,6 +1,12 @@
 import { SignalingAdapter } from './adapters/_base';
 import { Peer } from './Peer';
 import { RemotePeer } from './RemotePeer';
+import { EventEmitter } from './utils/EventEmitter';
+
+interface RoomEvents<MessageType = any> {
+  presence: (event: { peer: RemotePeer | Peer, type: 'join' | 'alive' | 'leave' }) => void,
+  message: (event: { peer: RemotePeer | Peer, message: MessageType }) => void,
+}
 
 /**
  * Room is a simple value object representing a room identifier
@@ -19,24 +25,7 @@ export class Room<MessageType = any> {
     this.signalingAdapter = signalingAdapter;
   }
 
-  private eventHandlers = {
-    presence: new Set<(event: { peer: RemotePeer | Peer, type: 'join' | 'alive' | 'leave' }) => void>(),
-    message: new Set<(event: { peer: RemotePeer | Peer, message: MessageType }) => void>(),
-  };
-
-  on<K extends keyof typeof this.eventHandlers>(event: K, handler: (event: Parameters<Parameters<typeof this.eventHandlers[K]['add']>[0]>[0]) => void) {
-    this.eventHandlers[event]?.add(handler);
-
-    return {
-      dispose: () => {
-        this.eventHandlers[event]?.delete(handler);
-      }
-    }
-  }
-
-  emit<K extends keyof typeof this.eventHandlers>(event: K, ...args: Parameters<Parameters<typeof this.eventHandlers[K]['add']>[0]>) {
-    this.eventHandlers[event]?.forEach((handler: any) => {
-      return handler(...args);
-    });
-  }
+  private eventEmitter = new EventEmitter<RoomEvents<MessageType>>();
+  get on() { return this.eventEmitter.on.bind(this.eventEmitter); }
+  get emit() { return this.eventEmitter.emit.bind(this.eventEmitter); }
 }

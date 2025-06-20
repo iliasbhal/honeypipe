@@ -118,7 +118,6 @@ export class RemotePeer<MessageType = any> {
     }
 
     this.dataChannel.send(serialized);
-    this.emitMessage(this.localPeerId, serialized);
   }
 
   peerSingalLoop = RemotePeer.createPeerSignalLoop();
@@ -179,25 +178,13 @@ export class RemotePeer<MessageType = any> {
     this.peerSingalLoop.started = false;
   }
 
-  emitMessage(peerId: string, rawMessage: string) {
-
-    console.log('--------------------------------');
-    const peer = this.peerRoom.getPeer(peerId)
-
-    console.log('emitMessage', !!peer, peerId, rawMessage);
-    const message = superJSON.parse(rawMessage) as MessageType;
-    this.room.emit('message', {
-      peer: peer,
-      message,
-    });
-  }
 
   setupDataChannel(dataChannel: RTCDataChannel) {
     this.dataChannel = dataChannel;
 
     dataChannel.onmessage = (event) => {
       console.log(this.localPeerId, 'dataChannel.onmessage', event);
-      this.emitMessage(this.otherPeerId, event.data);
+      this.peerRoom.emitMessage(this.otherPeerId, event.data);
     }
     dataChannel.onopen = () => {
       console.log(this.localPeerId, 'dataChannel.onopen');
@@ -227,7 +214,7 @@ export class RemotePeer<MessageType = any> {
     // console.log(this.localPeerId, 'sendSdpOffer', this.otherPeerId);
     const peerConnection = this.getChannelPeerConnection();
     const datachannel = peerConnection.createDataChannel('default');
-    this.setupDataChannel(datachannel);
+    this.setupDataChannel(datachannel, 'sendSdpOffer');
 
     const offer = await peerConnection.createOffer({});
     peerConnection.setLocalDescription(offer);
@@ -261,7 +248,7 @@ export class RemotePeer<MessageType = any> {
 
     peerConnection.ondatachannel = (event) => {
       console.log(this.localPeerId, 'ondatachannel', this.otherPeerId);
-      this.setupDataChannel(event.channel);
+      this.setupDataChannel(event.channel, 'no initiator');
     }
 
     this.room.signalingAdapter.push({

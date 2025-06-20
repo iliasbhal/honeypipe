@@ -2,6 +2,7 @@ import '../src/utils/polyfill';
 // import { vi } from 'vitest';
 import { Peer } from '../src/Peer';
 import { InMemorySignalingAdapter } from '../src/adapters/InMemorySignalingAdapter';
+
 import { wait } from '../src/utils/wait';
 import { SignalingAdapter } from '../src/adapters/_base';
 
@@ -29,9 +30,12 @@ const main = async () => {
   const charlie = new Peer({ peerId: 'Charlie' });
   // roomCharlie.on('presence', (event) => charlieSpy({ type: event.type, peerId: event.peer.id }));
 
-  alice.join(roomAlice);
-  bob.join(roomBob);
-  charlie.join(roomCharlie);
+  await alice.join(roomAlice);
+  await bob.join(roomBob);
+  await charlie.join(roomCharlie);
+
+
+
 
   await wait(3000);
 

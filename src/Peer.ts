@@ -1,5 +1,5 @@
 import { Room } from './Room';
-import { PeerRoom } from './RoomConnection';
+import { RoomConnection } from './RoomConnection';
 
 export interface PeerOptions {
   peerId: string;
@@ -19,10 +19,9 @@ const uuid = () => {
  */
 export class Peer {
   static Room = Room;
-  static PeerRoom = PeerRoom;
 
   readonly peerId: string;
-  private peerRooms = new WeakMap<Room, PeerRoom>(); // roomId -> PeerRoom instance
+  private roomConnections = new WeakMap<Room, RoomConnection>(); // roomId -> PeerRoom instance
 
   constructor(options?: PeerOptions) {
     this.peerId = options?.peerId || uuid();
@@ -33,13 +32,13 @@ export class Peer {
   }
 
   /**
-   * Get a PeerRoom or PeerChannel interface for a Room or Channel
+   * Get a RoomConnection or PeerChannel interface for a Room or Channel
    */
-  in<T extends Room>(room: T): PeerRoom {
-    const peerRoom = this.peerRooms.get(room);
+  in<T extends Room>(room: T): RoomConnection {
+    const peerRoom = this.roomConnections.get(room);
     if (!peerRoom) {
-      const newRoom = new PeerRoom(this, room);
-      this.peerRooms.set(room, newRoom);
+      const newRoom = new RoomConnection(this, room);
+      this.roomConnections.set(room, newRoom);
       return newRoom;
     }
 

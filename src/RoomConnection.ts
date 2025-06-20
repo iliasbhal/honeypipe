@@ -12,10 +12,16 @@ export type RoomPresenceHandler = (remotePeer: RemotePeer) => void;
  * PeerRoom provides room-specific operations for a peer
  * Created via peer.via(room)
  */
-export class PeerRoom<MessageType = any> {
+export class RoomConnection<MessageType = any> {
   peer: Peer;
   room: Room;
   private remotePeers = new Map<string, RemotePeer>();
+  private stateByPeer = new Map<Peer | RemotePeer, SignalingEvent['type']>();
+
+  get joined() {
+    const state = this.stateByPeer.get(this.peer);
+    return state === 'join' || state === 'alive';
+  }
 
   constructor(peer: Peer, room: Room) {
     this.peer = peer;
@@ -36,14 +42,14 @@ export class PeerRoom<MessageType = any> {
   }
 
 
-  peerSingalLoop = PeerRoom.createPeerSignalLoop()
+  peerSingalLoop = RoomConnection.createPeerSignalLoop()
 
   private startPeerSignalLoop() {
     if (this.peerSingalLoop.started) {
       return;
     }
 
-    this.peerSingalLoop = PeerRoom.createPeerSignalLoop();
+    this.peerSingalLoop = RoomConnection.createPeerSignalLoop();
     this.peerSingalLoop.started = true;
     const abortSignal = this.peerSingalLoop.abortController.signal;
 
@@ -102,16 +108,19 @@ export class PeerRoom<MessageType = any> {
 
     const isJoinOrAlive = event.type === 'join' || event.type === 'alive';
     const isLeave = event.type === 'leave';
+    const isRemotePeer = peer instanceof RemotePeer;
+    const isLocalPeer = peer.id === this.peer.id;
 
     const isPresenceEvent = isLeave || isJoinOrAlive;
     if (!isPresenceEvent) {
       return;
     }
 
-    if (peer instanceof RemotePeer) {
+    if (isRemotePeer) {
       if (isJoinOrAlive) peer.connect();
     }
 
+    this.stateByPeer.set(peer, event.type);
     this.room.emit('presence', {
       peer: peer,
       type: event.type
@@ -130,7 +139,7 @@ export class PeerRoom<MessageType = any> {
       }
 
       const remotePeer = new RemotePeer({
-        peerRoom: this,
+        roomConnection: this,
         localPeerId: this.peer.id,
         otherPeerId: peerId,
       });
@@ -165,25 +174,7 @@ export class PeerRoom<MessageType = any> {
    */
   join() {
     this.startPeerSignalLoop();
-
-    return new Promise<void>((resolve) => {
-      const abortController = new AbortController();
-      this.room.on('presence', (event) => {
-        const isLocalPeer = event.peer.id === this.peer.id;
-        if (!isLocalPeer) return;
-
-        if (event.type === 'join') {
-          resolve();
-          abortController.abort();
-        }
-
-        if (event.type === 'leave') {
-          abortController.abort();
-        }
-      }, {
-        signal: abortController.signal,
-      })
-    });
+    return this.waitForJoin();
   }
 
   /**
@@ -196,6 +187,7 @@ export class PeerRoom<MessageType = any> {
     });
 
     this.remotePeers.clear();
+    this.stateByPeer.clear();
 
     this.room.signalingAdapter.push({
       roomId: this.room.id,
@@ -229,10 +221,45 @@ export class PeerRoom<MessageType = any> {
   }
 
   /**
+   * Wait for the local peer to join the room
+   * @returns Promise that resolves when the local peer joins the room
+   */
+  async waitForJoin(): Promise<void> {
+
+    const abortController = new AbortController();
+    return new Promise<void>((_resolve, _reject) => {
+      const resolve = () => {
+        abortController.abort();
+        _resolve();
+      }
+      const reject = () => {
+        abortController.abort();
+        _reject();
+      }
+
+      if (this.joined) {
+        resolve();
+        return;
+      }
+
+      this.room.on('presence', (event) => {
+        const isLocalPeer = event.peer.id === this.peer.id;
+        if (!isLocalPeer) return;
+
+        if (event.type === 'join') resolve();
+        if (event.type === 'alive') resolve();
+        if (event.type === 'leave') reject();
+      }, {
+        signal: abortController.signal,
+      })
+    });
+  }
+
+  /**
    * Wait for at least one peer to have an active data channel
    * Resolves immediately if there's already an active data channel
    */
-  async waitForPeer(): Promise<void> {
+  async waitForOtherPeers(): Promise<void> {
     return new Promise((_resolve) => {
       const abortController = new AbortController();
 

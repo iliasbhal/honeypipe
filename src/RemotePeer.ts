@@ -1,5 +1,5 @@
 import { SignalingEvent } from './adapters/_base';
-import { PeerRoom } from './RoomConnection';
+import { RoomConnection } from './RoomConnection';
 import { Room } from './Room';
 import { wait } from './utils/wait';
 import * as superJSON from 'superjson'
@@ -8,7 +8,7 @@ import { EventEmitter } from './utils/EventEmitter';
 export type ChannelMessageHandler<Msg> = (message: { fromPeer: RemotePeer, message: Msg }) => void;
 
 interface RemotePeerConfig {
-  peerRoom: PeerRoom
+  roomConnection: RoomConnection
   localPeerId: string;
   otherPeerId: string;
 }
@@ -33,7 +33,7 @@ interface RemotePeerEvents {
  */
 export class RemotePeer<MessageType = any> {
   __type!: MessageType;
-  private peerRoom: RemotePeerConfig['peerRoom'];
+  private roomConnection: RemotePeerConfig['roomConnection'];
   private localPeerId: RemotePeerConfig['localPeerId'];
   private otherPeerId: RemotePeerConfig['otherPeerId'];
 
@@ -61,7 +61,7 @@ export class RemotePeer<MessageType = any> {
   constructor(config: RemotePeerConfig) {
     this.localPeerId = config.localPeerId;
     this.otherPeerId = config.otherPeerId;
-    this.peerRoom = config.peerRoom;
+    this.roomConnection = config.roomConnection;
 
     this.getChannelPeerConnection();
   }
@@ -74,7 +74,7 @@ export class RemotePeer<MessageType = any> {
   }
 
   get room(): Room {
-    return this.peerRoom.room;
+    return this.roomConnection.room;
   }
 
   /**
@@ -225,7 +225,7 @@ export class RemotePeer<MessageType = any> {
 
     dataChannel.addEventListener('message', (event) => {
       // console.log(this.localPeerId, 'dataChannel.onmessage', event);
-      this.peerRoom.emitMessage(this.id, event.data);
+      this.roomConnection.emitMessage(this.id, event.data);
     }, eventListenerConfig);
 
     dataChannel.addEventListener('open', (event) => {

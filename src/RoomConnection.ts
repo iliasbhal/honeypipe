@@ -1,9 +1,9 @@
+import superJSON from 'superjson';
 import { Peer } from './Peer';
 import { Room } from './Room';
-import { SignalingEvent } from './adapters/_base';
 import { RemotePeer } from './RemotePeer';
+import { SignalingEvent } from './adapters/_base';
 import { wait } from './utils/wait';
-import SuperJSON from 'superjson';
 
 export type RoomMessageHandler = (message: { from: RemotePeer, content: string }) => void;
 export type RoomPresenceHandler = (remotePeer: RemotePeer) => void;
@@ -99,6 +99,7 @@ export class PeerRoom<MessageType = any> {
       createIfNotExists: true,
       connectOnCreate: true,
     });
+
     const isJoinOrAlive = event.type === 'join' || event.type === 'alive';
     const isLeave = event.type === 'leave';
 
@@ -164,7 +165,25 @@ export class PeerRoom<MessageType = any> {
    */
   join() {
     this.startPeerSignalLoop();
-    return this;
+
+    return new Promise<void>((resolve) => {
+      const abortController = new AbortController();
+      this.room.on('presence', (event) => {
+        const isLocalPeer = event.peer.id === this.peer.id;
+        if (!isLocalPeer) return;
+
+        if (event.type === 'join') {
+          resolve();
+          abortController.abort();
+        }
+
+        if (event.type === 'leave') {
+          abortController.abort();
+        }
+      }, {
+        signal: abortController.signal,
+      })
+    });
   }
 
   /**
@@ -195,17 +214,43 @@ export class PeerRoom<MessageType = any> {
       remotePeer.sendMessage(message);
     });
 
-    const serialized = SuperJSON.stringify(message);
+    const serialized = superJSON.stringify(message);
     this.emitMessage(this.peer.id, serialized);
   }
 
   emitMessage(peerId: string, rawMessage: string) {
     const peer = this.getPeer(peerId)
 
-    const message = SuperJSON.parse(rawMessage) as MessageType;
+    const message = superJSON.parse(rawMessage) as MessageType;
     this.room.emit('message', {
       peer: peer,
       message,
+    });
+  }
+
+  /**
+   * Wait for at least one peer to have an active data channel
+   * Resolves immediately if there's already an active data channel
+   */
+  async waitForPeer(): Promise<void> {
+    return new Promise((_resolve) => {
+      const abortController = new AbortController();
+
+      const waitForPeerReady = async (peer: RemotePeer) => {
+        await peer.waitForReady();
+        abortController.abort();
+        _resolve()
+      }
+
+      const existingPeers = Array.from(this.remotePeers.values());
+      existingPeers.forEach(waitForPeerReady);
+
+      this.room.on('presence', async (event) => {
+        const isRemotePeerJoin = event.type === 'join' && event.peer instanceof RemotePeer;
+        if (!isRemotePeerJoin) return;
+
+        waitForPeerReady(event.peer)
+      }, { signal: abortController.signal });
     });
   }
 }

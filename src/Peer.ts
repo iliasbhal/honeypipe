@@ -1,5 +1,5 @@
 import { Room } from './Room';
-import { PeerRoom } from './PeerRoom';
+import { PeerRoom } from './RoomConnection';
 
 export interface PeerOptions {
   peerId: string;
@@ -49,7 +49,7 @@ export class Peer {
   /**
    * Join a room (internal use by PeerRoom)
    */
-  join(room: Room): PeerRoom {
+  join(room: Room) {
     const peerRoom = this.in(room);
     return peerRoom.join();
   }

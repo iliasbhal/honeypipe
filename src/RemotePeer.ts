@@ -1,8 +1,9 @@
 import { SignalingEvent } from './adapters/_base';
-import { PeerRoom } from './PeerRoom';
+import { PeerRoom } from './RoomConnection';
 import { Room } from './Room';
 import { wait } from './utils/wait';
 import * as superJSON from 'superjson'
+import { EventEmitter } from './utils/EventEmitter';
 
 export type ChannelMessageHandler<Msg> = (message: { fromPeer: RemotePeer, message: Msg }) => void;
 
@@ -10,6 +11,20 @@ interface RemotePeerConfig {
   peerRoom: PeerRoom
   localPeerId: string;
   otherPeerId: string;
+}
+
+type DataChannelEventHandler = Exclude<Parameters<RTCDataChannel['addEventListener']>[1], EventListenerObject>
+type PeerConnectionEventHandler = Exclude<Parameters<RTCPeerConnection['addEventListener']>[1], EventListenerObject>
+
+interface RemotePeerEvents {
+  dataChannel: {
+    dataChannel: RTCDataChannel;
+    event: Parameters<DataChannelEventHandler>[0];
+  };
+  peerConnection: {
+    peerConnection: RTCPeerConnection;
+    event: Parameters<PeerConnectionEventHandler>[0];
+  };
 }
 
 /**
@@ -25,6 +40,10 @@ export class RemotePeer<MessageType = any> {
   private peerConnection: RTCPeerConnection | null = null;
   private dataChannel: RTCDataChannel | null = null;
   private signalingEvents: SignalingEvent[] = [];
+
+  private eventEmitter = new EventEmitter<RemotePeerEvents>();
+  get on() { return this.eventEmitter.on.bind(this.eventEmitter); }
+  get emit() { return this.eventEmitter.emit.bind(this.eventEmitter); }
 
   static getChannelId(peerId1: string, peerId2: string, roomId: string) {
     if (peerId1 === peerId2) {
@@ -112,6 +131,35 @@ export class RemotePeer<MessageType = any> {
     }
 
     this.dataChannel.send(serialized);
+  }
+
+  /**
+   * Check if the data channel is active and ready for communication
+   */
+  isDataChannelActive(): boolean {
+    return this.dataChannel !== null && this.dataChannel.readyState === 'open';
+  }
+
+  /**
+   * Wait for the data channel to be ready
+   * Resolves immediately if the data channel is already open
+   */
+  waitForReady(): Promise<void> {
+    // If already ready, resolve immediately
+    if (this.isDataChannelActive()) {
+      return Promise.resolve();
+    }
+
+    // Wait for the data channel to open
+    return new Promise<void>((resolve) => {
+      const onDataChannel = this.eventEmitter.on('dataChannel', ({ dataChannel }) => {
+        const isOpen = dataChannel.readyState === 'open';
+        if (isOpen) {
+          resolve();
+          onDataChannel.dispose();
+        }
+      });
+    });
   }
 
   peerSingalLoop = RemotePeer.createPeerSignalLoop();

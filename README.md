@@ -11,7 +11,8 @@ Ever tried to set up WebRTC and felt like you were wrestling with a swarm of ang
 - **🚀 Zero Config Magic** - Just like bees know how to make honey, HoneyPipe knows how to make connections
 - **🎯 Straight to the Point** - No more drowning in boilerplate. We handle the sticky stuff
 - **🔧 Type-Safe** - TypeScript support out of the box
-- **📦 Channel-Based** - Organize your connections like a well-structured hive
+- **📦 Room-Based** - Organize your connections like a well-structured hive
+- **🌐 P2P Messaging** - Direct peer-to-peer communication with automatic connection management
 
 ## 📦 Installation
 
@@ -28,34 +29,45 @@ pnpm add honeypipe
 ### Basic Setup
 
 ```typescript
-import { Peer, Channel } from 'honeypipe'
+import { Peer } from 'honeypipe'
 import { InMemorySignalingAdapter } from 'honeypipe/adapters'
 
 // Create a signaling adapter (you can also implement your own!)
 const signalingAdapter = new InMemorySignalingAdapter()
 
-// Create a channel - think of it as a room where peers can meet
-const channel = new Channel<{ type: 'chat', message: string }>('room-123', signalingAdapter)
+// Create a room - think of it as a space where peers can meet
+const room = new Peer.Room<{ type: 'chat', message: string }>('room-123', signalingAdapter)
 
 // Create peers - each peer is like a bee in the hive
-const peer1 = new Peer({ peerId: 'alice' })
-const peer2 = new Peer({ peerId: 'bob' })
+const alice = new Peer({ peerId: 'alice' })
+const bob = new Peer({ peerId: 'bob' })
 
-// Connect peers to the channel
-await peer1.connect(channel)
-await peer2.connect(channel)
-
-// Listen for messages on the channel
-channel.onMessage((message) => {
-  console.log('Received:', message)
+// Listen for room events
+room.on('presence', (event) => {
+  console.log(`${event.peer.id} ${event.type}ed the room`)
 })
 
-// Send messages through the peer
-peer1.send(channel, { type: 'chat', message: 'Hello from Alice! 🐝' })
-peer2.send(channel, { type: 'chat', message: 'Hey Alice! 👋' })
+room.on('message', (event) => {
+  console.log(`${event.peer.id}:`, event.message)
+})
+
+// Join the room
+await alice.join(room)
+await bob.join(room)
+
+// Get room connection for sending messages
+const aliceConnection = alice.in(room)
+const bobConnection = bob.in(room)
+
+// Wait for peers to be ready
+await aliceConnection.waitForOtherPeers()
+
+// Send messages to all peers in the room
+aliceConnection.sendMessage({ type: 'chat', message: 'Hello from Alice! 🐝' })
+bobConnection.sendMessage({ type: 'chat', message: 'Hey Alice! 👋' })
 ```
 
-### Type-Safe Channels
+### Type-Safe Rooms
 
 ```typescript
 // Define your message types
@@ -65,11 +77,12 @@ interface GameMessage {
   data: any
 }
 
-// Create a typed channel
-const gameChannel = new Channel<GameMessage>('game-session', signalingAdapter)
+// Create a typed room
+const gameRoom = new Peer.Room<GameMessage>('game-session', signalingAdapter)
 
 // TypeScript knows the message shape!
-peer.send(gameChannel, {
+const connection = player.in(gameRoom)
+connection.sendMessage({
   type: 'move',
   playerId: 'alice',
   data: { x: 100, y: 200 }
@@ -79,48 +92,59 @@ peer.send(gameChannel, {
 ### Managing Connections
 
 ```typescript
-// Check connection states
-const connectionState = peer.getConnectionState(channel.id)
-const iceState = peer.getIceConnectionState(channel.id)
-const dataChannelState = peer.getDataChannelState(channel.id)
+// Get room connection
+const connection = peer.in(room)
 
-// Get all connection states at once
-const allStates = peer.getAllConnectionStates()
+// Get all connected peers in the room
+const peers = connection.getPeers()
 
-// Disconnect from a specific channel
-await peer.disconnect(channel)
+// Get a specific peer
+const remotePeer = connection.getPeer('bob')
 
-// Or close all connections
-await peer.close()
-```
-
-### Channel Management
-
-```typescript
-// Check how many peers are in a channel
-const peerCount = channel.getPeerCount()
-console.log(`${peerCount} bees in the hive!`)
-
-// Get all connected peers
-const peers = channel.getPeers()
-
-// Check if a specific peer is connected
-if (channel.hasPeer('alice')) {
-  console.log('Alice is in the channel!')
+// Check if a peer's data channel is active
+if (remotePeer?.isDataChannelActive()) {
+  console.log('Bob is ready to receive messages!')
 }
 
-// Stop a channel (disconnects all peers)
-await channel.stop()
+// Wait for a peer to be ready
+await remotePeer?.waitForReady()
+
+// Leave a room
+peer.leave(room)
+```
+
+### Room Events
+
+```typescript
+// Listen for peer presence changes
+room.on('presence', (event) => {
+  switch (event.type) {
+    case 'join':
+      console.log(`${event.peer.id} joined the room`)
+      break
+    case 'alive':
+      console.log(`${event.peer.id} is still active`)
+      break
+    case 'leave':
+      console.log(`${event.peer.id} left the room`)
+      break
+  }
+})
+
+// Listen for messages
+room.on('message', (event) => {
+  console.log(`Message from ${event.peer.id}:`, event.message)
+})
 ```
 
 ### Real-World Example: Chat Room
 
 ```typescript
-import { Peer, Channel } from 'honeypipe'
+import { Peer } from 'honeypipe'
 import { InMemorySignalingAdapter } from 'honeypipe/adapters'
 
 interface ChatMessage {
-  type: 'message' | 'join' | 'leave'
+  type: 'message' | 'typing' | 'reaction'
   userId: string
   content?: string
   timestamp: number
@@ -128,41 +152,50 @@ interface ChatMessage {
 
 class ChatRoom {
   private peer: Peer
-  private channel: Channel<ChatMessage>
+  private room: Peer.Room<ChatMessage>
+  private connection: any // RoomConnection<ChatMessage>
   
   constructor(userId: string, roomId: string) {
     const signalingAdapter = new InMemorySignalingAdapter()
     
     this.peer = new Peer({ peerId: userId })
-    this.channel = new Channel<ChatMessage>(roomId, signalingAdapter)
+    this.room = new Peer.Room<ChatMessage>(roomId, signalingAdapter)
     
-    // Set up message handling
-    this.channel.onMessage((message) => {
+    // Set up event handling
+    this.room.on('presence', (event) => {
+      if (event.type === 'join') {
+        console.log(`${event.peer.id} joined the hive! 🐝`)
+      } else if (event.type === 'leave') {
+        console.log(`${event.peer.id} flew away 👋`)
+      }
+    })
+    
+    this.room.on('message', (event) => {
+      const message = event.message
       switch (message.type) {
-        case 'join':
-          console.log(`${message.userId} joined the hive! 🐝`)
-          break
         case 'message':
           console.log(`${message.userId}: ${message.content}`)
           break
-        case 'leave':
-          console.log(`${message.userId} flew away 👋`)
+        case 'typing':
+          console.log(`${message.userId} is typing...`)
+          break
+        case 'reaction':
+          console.log(`${message.userId} reacted: ${message.content}`)
           break
       }
     })
   }
   
   async join() {
-    await this.peer.connect(this.channel)
-    this.broadcast({
-      type: 'join',
-      userId: this.peer.id,
-      timestamp: Date.now()
-    })
+    await this.peer.join(this.room)
+    this.connection = this.peer.in(this.room)
+    
+    // Wait for other peers before sending messages
+    await this.connection.waitForOtherPeers()
   }
   
   sendMessage(content: string) {
-    this.broadcast({
+    this.connection.sendMessage({
       type: 'message',
       userId: this.peer.id,
       content,
@@ -170,17 +203,16 @@ class ChatRoom {
     })
   }
   
-  private broadcast(message: ChatMessage) {
-    this.peer.send(this.channel, message)
-  }
-  
-  async leave() {
-    this.broadcast({
-      type: 'leave',
+  sendTypingIndicator() {
+    this.connection.sendMessage({
+      type: 'typing',
       userId: this.peer.id,
       timestamp: Date.now()
     })
-    await this.peer.disconnect(this.channel)
+  }
+  
+  async leave() {
+    this.peer.leave(this.room)
   }
 }
 
@@ -206,44 +238,80 @@ yarn install
 yarn dev
 ```
 
-## 🍯 API Sweetness
+## 🍯 Signaling Adapters
 
-### Custom API Routes
+HoneyPipe uses signaling adapters to facilitate peer discovery. Choose the one that fits your architecture:
 
-Want to add your own API endpoints? Easy as spreading honey on toast:
+### InMemorySignalingAdapter
 
-```javascript
-// playground/server.js
-import express from 'express'
+Perfect for local development and testing. All peers must share the same adapter instance.
 
-export const app = express()
+```typescript
+import { InMemorySignalingAdapter } from 'honeypipe/adapters'
 
-app.get('/buzz', (req, res) => {
-  res.json({ message: 'Bzzzzzz! 🐝' })
-})
+const adapter = new InMemorySignalingAdapter()
+```
 
-app.post('/collect-nectar', (req, res) => {
-  // Your sweet logic here
-  res.json({ collected: true, sweetness: 100 })
+### FetchSignalingAdapter
+
+For client-server architectures using HTTP polling.
+
+```typescript
+import { FetchSignalingAdapter } from 'honeypipe/adapters'
+
+const adapter = new FetchSignalingAdapter({
+  serverUrl: 'https://your-signaling-server.com'
 })
 ```
 
-### Custom API Prefix
+### PostMessageSignalingAdapter
 
-Don't like `/api`? No problem! Configure your own:
+For iframe-based communication or web workers.
 
-```javascript
-// vite.config.ts
-import { apiPlugin } from './plugins/apiPlugin'
+```typescript
+import { PostMessageSignalingAdapter } from 'honeypipe/adapters'
 
-export default defineConfig({
-  plugins: [
-    apiPlugin({
-      prefix: '/hive',  // Now all your APIs live at /hive/*
-      app: yourExpressApp
-    })
-  ]
+const adapter = new PostMessageSignalingAdapter({
+  target: window.parent
 })
+```
+
+### RedisSignalingAdapter
+
+For server-side applications using Redis as a message broker.
+
+```typescript
+import { RedisSignalingAdapter } from 'honeypipe/adapters'
+
+const adapter = new RedisSignalingAdapter({
+  redis: redisClient
+})
+```
+
+### Custom Signaling Adapter
+
+Create your own adapter by extending the base class:
+
+```typescript
+import { SignalingAdapter } from 'honeypipe/adapters'
+
+class CustomSignalingAdapter extends SignalingAdapter {
+  async push(event: SignalingEvent): Promise<void> {
+    // Send the event to your signaling server
+  }
+  
+  async pull(config: PullConfig): Promise<SignalingEvent[]> {
+    // Retrieve events from your signaling server
+  }
+  
+  getRtcConfiguration(): RTCConfiguration {
+    return {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' }
+      ]
+    }
+  }
+}
 ```
 
 ## 🎮 Playground
@@ -258,26 +326,48 @@ The `/playground` directory is your experimental garden! 🌻
 
 ```
 honeypipe/
-├── 📁 src/              # The queen's chamber (core library)
-│   ├── Peer.ts          # Peer class - manages connections
-│   ├── Channel.ts       # Channel class - rooms for peers
-│   └── adapters/        # Signaling adapters
-├── 📁 playground/       # Your experimental garden
-│   ├── components/      # React components for testing
-│   └── server.js        # Express server for API routes
-├── 📁 plugins/          # Vite plugin magic
-│   └── apiPlugin.ts     # API integration sorcery
-└── 🍯 package.json      # The recipe book
+├── 📁 src/                    # The queen's chamber (core library)
+│   ├── Peer.ts               # Peer class - manages connections
+│   ├── Room.ts               # Room class - spaces for peers
+│   ├── RoomConnection.ts     # Room connection manager
+│   ├── RemotePeer.ts         # Remote peer connections
+│   └── adapters/             # Signaling adapters
+│       ├── InMemorySignalingAdapter.ts
+│       ├── FetchSignalingAdapter.ts
+│       ├── PostMessageSignalingAdapter.ts
+│       └── RedisSignalingAdapter.ts
+├── 📁 playground/            # Your experimental garden
+│   ├── components/           # React components for testing
+│   └── debug/               # WebRTC debugging tools
+├── 📁 tests/                # Test suites
+│   └── index.test.ts        # Core functionality tests
+└── 🍯 package.json          # The recipe book
 ```
 
 ## 🐛 Debugging
 
 Having trouble? Check the hive:
 
-1. **Connection Issues?** - Check `peer.getAllConnectionStates()` for diagnostics
-2. **Messages not arriving?** - Ensure both peers are connected to the same channel
-3. **TypeScript errors?** - Make sure your message types match across peers
-4. **Still stuck?** - Create an issue, we don't sting! 🐝
+1. **Connection Issues?** 
+   - Ensure peers are using the same room ID and signaling adapter
+   - Check if `remotePeer.isDataChannelActive()` returns true before sending messages
+   - Use `connection.waitForOtherPeers()` to ensure peers are ready
+
+2. **Messages not arriving?** 
+   - Verify both peers have joined the same room
+   - Check room events with `room.on('message', ...)`
+   - Ensure message types match your TypeScript definitions
+
+3. **Peer discovery problems?**
+   - Verify your signaling adapter is configured correctly
+   - Check `room.on('presence', ...)` events to see peer join/leave activity
+   - For production, ensure STUN/TURN servers are configured
+
+4. **TypeScript errors?** 
+   - Make sure your message types are consistent across all peers
+   - Use the generic type parameter: `new Peer.Room<YourMessageType>()`
+
+5. **Still stuck?** - Create an issue, we don't sting! 🐝
 
 ## 🤝 Contributing
 

@@ -1,6 +1,6 @@
 import { Peer } from './Peer';
 import { Room } from './Room';
-import { SignalingEvent } from './adapters/RedisSignalingAdapter';
+import { SignalingEvent } from './adapters/_base';
 import { RemotePeer } from './RemotePeer';
 import { wait } from './utils/wait';
 import SuperJSON from 'superjson';
@@ -95,10 +95,10 @@ export class PeerRoom<MessageType = any> {
   }
 
   processSignalingEvent(event: SignalingEvent) {
-    if (this.peer.id === 'Alice') {
-      console.log('processSignalingEvent', event);
-    }
-    const peer = this.getPeer(event.peerId, { createIfNotExists: true });
+    const peer = this.getPeer(event.peerId, {
+      createIfNotExists: true,
+      connectOnCreate: true,
+    });
     const isJoinOrAlive = event.type === 'join' || event.type === 'alive';
     const isLeave = event.type === 'leave';
 
@@ -107,11 +107,8 @@ export class PeerRoom<MessageType = any> {
       return;
     }
 
-    if (!event.peerId) {
-      console.log('event.peerId', event);
-    }
     if (peer instanceof RemotePeer) {
-      if (isJoinOrAlive) peer.startPeerSignalLoop();
+      if (isJoinOrAlive) peer.connect();
     }
 
     this.room.emit('presence', {
@@ -120,9 +117,8 @@ export class PeerRoom<MessageType = any> {
     });
   }
 
-  getPeer(peerId: string, config?: { createIfNotExists: boolean }): RemotePeer | Peer | undefined {
+  getPeer(peerId: string, config?: { createIfNotExists: boolean, connectOnCreate: boolean }): RemotePeer | Peer | undefined {
     if (peerId === this.peer.id) {
-      console.log('getPeer', peerId, this.peer.id, !!this.peer);
       return this.peer;
     }
 
@@ -138,11 +134,14 @@ export class PeerRoom<MessageType = any> {
         otherPeerId: peerId,
       });
 
+      if (config?.connectOnCreate) {
+        remotePeer.connect();
+      }
+
       this.remotePeers.set(remotePeerId, remotePeer);
     }
 
     const remotePeer = this.remotePeers.get(remotePeerId);
-    console.log('getPeer 2', peerId, this.peer.id, !!remotePeer);
     return remotePeer;
   }
 
@@ -174,7 +173,7 @@ export class PeerRoom<MessageType = any> {
   leave() {
     this.stopPeerSignalLoop();
     this.remotePeers.forEach(remotePeer => {
-      remotePeer.leave();
+      remotePeer.disconnect();
     });
 
     this.remotePeers.clear();
@@ -201,11 +200,8 @@ export class PeerRoom<MessageType = any> {
   }
 
   emitMessage(peerId: string, rawMessage: string) {
-
-    console.log('--------------------------------');
     const peer = this.getPeer(peerId)
 
-    console.log('emitMessage', !!peer, peerId, rawMessage);
     const message = SuperJSON.parse(rawMessage) as MessageType;
     this.room.emit('message', {
       peer: peer,

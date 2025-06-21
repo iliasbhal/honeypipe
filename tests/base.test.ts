@@ -4,7 +4,7 @@ import { Peer } from '../src/Peer';
 import { InMemorySignalingAdapter } from '../src/adapters/InMemorySignalingAdapter';
 import { wait } from '../src/utils/wait';
 
-describe('Peer Communication', () => {
+describe('Basic Connection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

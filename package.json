@@ -9,10 +9,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "vitest",
-    "demo:master": "tsx scripts/master-process.ts",
-    "demo:peers": "tsx playground/script.tsx",
-    "demo:ink": "yarn tsx playground/ink-demo.tsx"
+    "test": "vitest"
   },
   "dependencies": {
     "@number-flow/react": "^0.5.10",

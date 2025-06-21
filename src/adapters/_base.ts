@@ -10,6 +10,10 @@ export type SignalingEvent = {
 } | {
   peerId: string;
   channelId: string;
+  type: 'sdpRestart';
+} | {
+  peerId: string;
+  channelId: string;
   type: 'iceCandidate';
   data: RTCIceCandidateInit;
 }

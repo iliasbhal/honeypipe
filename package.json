@@ -1,7 +1,6 @@
 {
-  "private": true,
   "name": "honeypipe",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "It's actually very very easy to do WebRTC",
   "main": "index.js",
   "author": "ilias.bhal@gmail.com",

@@ -103,7 +103,7 @@ export class RoomConnection<MessageType = any> {
   processSignalingEvent(event: SignalingEvent) {
     const peer = this.getPeer(event.peerId, {
       createIfNotExists: true,
-      connectOnCreate: true,
+      connectOnCreate: false,
     });
 
     const isJoinOrAlive = event.type === 'join' || event.type === 'alive';
@@ -202,6 +202,7 @@ export class RoomConnection<MessageType = any> {
   }
 
   sendMessage(message: MessageType) {
+    console.log('sendMessage', message, this.getPeers().length);
     this.getPeers().forEach(remotePeer => {
       remotePeer.sendMessage(message);
     });

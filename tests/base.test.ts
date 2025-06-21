@@ -33,7 +33,6 @@ describe('Basic Connection', () => {
 
 
   it('should detect people that joined a room', async () => {
-
     alice.join(roomAlice);
     bob.join(roomBob);
     charlie.join(roomCharlie);
@@ -57,7 +56,11 @@ describe('Basic Connection', () => {
     roomBob.on('message', (event) => bobSpy({ peerId: event.peer.id, message: event.message }));
     roomCharlie.on('message', (event) => charlieSpy({ peerId: event.peer.id, message: event.message }));
 
-    await wait(1000);
+    await Promise.all([
+      await alice.in(roomAlice).waitForOtherPeers(),
+      await bob.in(roomBob).waitForOtherPeers(),
+      await charlie.in(roomCharlie).waitForOtherPeers(),
+    ]);
 
     alice.in(roomAlice).sendMessage('Hello everyone! (Alice)');
     bob.in(roomBob).sendMessage('Hello everyone! (Bob)');

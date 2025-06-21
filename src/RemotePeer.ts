@@ -51,13 +51,9 @@ export class RemotePeer<MessageType = any> {
   private setupEventHandlers() {
     // Peer connection event handlers
     this.on('peerConnection', ({ type, event }) => {
+      // console.log('peerConnection', type, this.localPeerId, '->', this.otherPeerId);
       switch (type) {
         case 'connectionstatechange':
-          const state = this.peerConnection?.connectionState;
-          if (state === 'failed' || state === 'disconnected') {
-            console.log(`Peer connection ${state} for ${this.otherPeerId}, attempting reconnection...`);
-            this.reconnect();
-          }
           break;
         case 'datachannel':
           this.dataChannel = event.channel;
@@ -76,24 +72,17 @@ export class RemotePeer<MessageType = any> {
     });
 
     // Data channel event handlers
-    this.on('dataChannel', ({ dataChannel, type, event }) => {
+    this.on('dataChannel', ({ type, event }) => {
+      // console.log('dataChannel', type, this.localPeerId, '->', this.otherPeerId);
       switch (type) {
         case 'message':
           this.roomConnection.emitMessage(this.id, event.data);
           break;
-        case 'open':
-          // Reset reconnect attempts on successful connection
+        case 'open': ;
           break;
         case 'close':
-          // Attempt to reconnect if not intentionally disconnected
-          if (this.peerSingalLoop.started) {
-            this.reconnect();
-          }
           break;
         case 'error':
-          console.error(`Data channel error for peer ${this.otherPeerId}:`, event);
-          // Trigger reconnection on error
-          this.reconnect();
           break;
       }
     });
@@ -180,7 +169,8 @@ export class RemotePeer<MessageType = any> {
   /**
    * Attempt to reconnect with exponential backoff
    */
-  private async reconnect() {
+  async reconnect() {
+    // console.log('reconnect', this.localPeerId, '->', this.otherPeerId);
     const abortController = new AbortController();
     const reconnect = {
       abortSignal: abortController.signal,
@@ -232,7 +222,6 @@ export class RemotePeer<MessageType = any> {
   }
 
 
-
   listenToPeerSignals() {
     if (this.peerSingalLoop.started) {
       return;
@@ -278,13 +267,12 @@ export class RemotePeer<MessageType = any> {
   setupDataChannel(dataChannel: RTCDataChannel) {
     dataChannelEventsTypes.forEach(eventType => {
       dataChannel.addEventListener(eventType, (event) => {
-        (event: any) => {
-          this.emit('dataChannel', {
-            dataChannel: this.dataChannel!,
-            type: eventType,
-            event,
-          });
-        };
+        // @ts-expect-error
+        this.emit('dataChannel', {
+          dataChannel: this.dataChannel!,
+          type: eventType,
+          event,
+        });
       }, {
         signal: this.dataChannelAbortController.signal,
       });
@@ -295,13 +283,12 @@ export class RemotePeer<MessageType = any> {
   setupPeerConnection(peerConnection: RTCPeerConnection) {
     peerConnectionEventsTypes.forEach(eventType => {
       peerConnection.addEventListener(eventType, (event) => {
-        return (event: any) => {
-          this.emit('peerConnection', {
-            peerConnection: this.peerConnection!,
-            type: eventType,
-            event
-          });
-        };
+        // @ts-expect-error
+        this.emit('peerConnection', {
+          peerConnection: this.peerConnection!,
+          type: eventType,
+          event
+        });
       }, {
         signal: this.peerConnectionAbortController.signal,
       });
@@ -312,12 +299,15 @@ export class RemotePeer<MessageType = any> {
     const isOwnEvent = event.peerId === this.localPeerId;
     if (isOwnEvent) return;
 
-    if (event.type === 'iceCandidate') return this.handleIceCandidate(event.data);
     if (event.type === 'sdpOffer') return this.handleSdpOffer(event.data);
     if (event.type === 'sdpAnswer') return this.handleSdpAnswer(event.data);
+    if (event.type === 'sdpRestart') return this.reconnect();
+
+    if (event.type === 'iceCandidate') return this.handleIceCandidate(event.data);
   }
 
   async sendSdpOffer() {
+    // console.log(this.localPeerId, 'sendSdpOffer', this.otherPeerId);
     const peerConnection = this.getChannelPeerConnection();
     this.dataChannel = peerConnection.createDataChannel('default');
     this.setupDataChannel(this.dataChannel);
@@ -355,12 +345,12 @@ export class RemotePeer<MessageType = any> {
   async handleSdpOffer(sdpOffer: RTCSessionDescriptionInit) {
     // console.log(this.localPeerId, 'handle sdpOffer', this.otherPeerId);
     const peerConnection = this.getChannelPeerConnection();
-    peerConnection.setRemoteDescription(sdpOffer);
+    await peerConnection.setRemoteDescription(sdpOffer);
 
     const answer = await peerConnection.createAnswer({});
-    peerConnection.setLocalDescription(answer);
+    await peerConnection.setLocalDescription(answer);
 
-    this.room.signalingAdapter.push({
+    await this.room.signalingAdapter.push({
       peerId: this.localPeerId,
       channelId: this.channelId,
       type: 'sdpAnswer',

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import * as Nuqs from "nuqs";
 import { ConfigUI } from './ConfigUI';
+import { Timeline } from './Timeline';
 import { createGlobalStyle } from 'styled-components';
 
 const backgroundColor = '#0a0a0a';
@@ -20,7 +21,8 @@ const GlobalStyle = createGlobalStyle`
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     min-height: 100vh;
   }
-  
+
+
   * {
     box-sizing: border-box;
   }
@@ -28,6 +30,12 @@ const GlobalStyle = createGlobalStyle`
 
 export const App = () => {
   const [roomId, setRoomId] = Nuqs.useQueryState('roomId', 
+    Nuqs.parseAsString.withOptions({
+      history: 'replace',
+    }),
+  );
+  
+  const [peerId] = Nuqs.useQueryState('peerId', 
     Nuqs.parseAsString.withOptions({
       history: 'replace',
     }),
@@ -52,10 +60,17 @@ export const App = () => {
     }
   };
 
+  // Show Timeline if both roomId and peerId are present in URL
+  const showTimeline = roomId && peerId;
+
   return (
     <>
       <GlobalStyle />
-      <ConfigUI onConfigChange={handleConfigChange} />
+      {showTimeline ? (
+        <Timeline roomId={roomId} peerId={peerId} />
+      ) : (
+        <ConfigUI onConfigChange={handleConfigChange} />
+      )}
     </>
   );
 }

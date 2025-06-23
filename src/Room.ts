@@ -27,5 +27,6 @@ export class Room<MessageType = any> {
 
   private eventEmitter = new EventEmitter<RoomEvents<MessageType>>();
   get on() { return this.eventEmitter.on.bind(this.eventEmitter); }
+  get off() { return this.eventEmitter.off.bind(this.eventEmitter); }
   get emit() { return this.eventEmitter.emit.bind(this.eventEmitter); }
 }

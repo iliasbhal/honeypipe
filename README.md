@@ -110,7 +110,7 @@ if (remotePeer?.isDataChannelActive()) {
 }
 
 // Wait for a peer to be ready
-await remotePeer?.waitForReady()
+await remotePeer?.waitForConnectionReady()
 
 // Leave a room
 peer.leave(room)

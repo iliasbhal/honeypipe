@@ -111,12 +111,11 @@ export class RemotePeer<MessageType = any> {
  * Join the room
  */
   connect() {
+    this.listenToPeerSignals();
+
     if (this.isInitiator()) {
       this.sendSdpOffer();
     }
-
-    this.listenToPeerSignals();
-    return;
   }
 
   /**
@@ -196,7 +195,7 @@ export class RemotePeer<MessageType = any> {
    * Wait for the data channel to be ready
    * Resolves immediately if the data channel is already open
    */
-  waitForReady(): Promise<void> {
+  waitForConnectionReady(): Promise<void> {
     // If already ready, resolve immediately
     if (this.isDataChannelActive()) {
       return Promise.resolve();
@@ -307,8 +306,8 @@ export class RemotePeer<MessageType = any> {
   }
 
   async sendSdpOffer() {
-    // console.log(this.localPeerId, 'sendSdpOffer', this.otherPeerId);
     const peerConnection = this.getChannelPeerConnection();
+
     this.dataChannel = peerConnection.createDataChannel('default');
     this.setupDataChannel(this.dataChannel);
 

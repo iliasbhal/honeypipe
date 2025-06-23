@@ -106,18 +106,18 @@ export class RoomConnection<MessageType = any> {
       connectOnCreate: false,
     });
 
-    const isJoinOrAlive = event.type === 'join' || event.type === 'alive';
-    const isLeave = event.type === 'leave';
     const isRemotePeer = peer instanceof RemotePeer;
-    const isLocalPeer = peer.id === this.peer.id;
-
-    const isPresenceEvent = isLeave || isJoinOrAlive;
-    if (!isPresenceEvent) {
-      return;
-    }
+    const isJoinEvent = event.type === 'join';
+    const isLeaveEvent = event.type === 'leave';
 
     if (isRemotePeer) {
-      if (isJoinOrAlive) peer.connect();
+      if (isLeaveEvent) {
+        peer.disconnect();
+      }
+
+      if (isJoinEvent) {
+        peer.connect();
+      }
     }
 
     this.stateByPeer.set(peer, event.type);
@@ -265,7 +265,7 @@ export class RoomConnection<MessageType = any> {
       const abortController = new AbortController();
 
       const waitForPeerReady = async (peer: RemotePeer) => {
-        await peer.waitForReady();
+        await peer.waitForConnectionReady();
         abortController.abort();
         _resolve()
       }

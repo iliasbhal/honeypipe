@@ -1,25 +1,26 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
+import { User, Plus, Xmark } from 'iconoir-react';
 
 const Container = styled.div`
   font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-  background: #0a0a0a;
-  border: 1px solid #1a1a1a;
-  border-radius: 8px;
-  padding: 24px;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  padding: 32px;
   max-width: 600px;
   margin: 20px;
-  color: #e0e0e0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  color: #f0f0f0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
 `;
 
 const Header = styled.h2`
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: #666;
-  margin: 0 0 24px 0;
+  letter-spacing: 0.05em;
+  color: #f0f0f0;
+  margin: 0 0 28px 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -40,44 +41,46 @@ const Section = styled.div`
 
 const Label = styled.label`
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #666;
-  margin-bottom: 8px;
-  font-weight: 500;
+  color: #a0a0a0;
+  margin-bottom: 10px;
+  font-weight: 600;
 `;
 
 const Input = styled.input`
   width: 100%;
-  padding: 12px 16px;
+  padding: 14px 18px;
   background: #0f0f0f;
-  border: 1px solid #222;
-  border-radius: 4px;
+  border: 2px solid #2a2a2a;
+  border-radius: 8px;
   font-family: inherit;
-  font-size: 14px;
-  color: #e0e0e0;
+  font-size: 15px;
+  color: #f0f0f0;
   box-sizing: border-box;
   transition: all 0.2s ease;
   
   &:hover {
-    border-color: #333;
+    border-color: #3a3a3a;
+    background: #121212;
   }
   
   &:focus {
     outline: none;
     border-color: #00ff88;
     background: #0a0a0a;
-    box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.1);
+    box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.15);
   }
   
   &::placeholder {
-    color: #444;
+    color: #606060;
   }
   
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    background: #0a0a0a;
   }
 `;
 
@@ -93,13 +96,13 @@ const InputField = styled(Input)`
 
 const Button = styled.button`
   font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 12px 20px;
   background: transparent;
   color: #00ff88;
-  border: 1px solid #00ff88;
-  border-radius: 4px;
+  border: 2px solid #00ff88;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
   text-transform: uppercase;
@@ -107,9 +110,9 @@ const Button = styled.button`
   
   &:hover:not(:disabled) {
     background: #00ff88;
-    color: #000;
+    color: #000000;
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 255, 136, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);
   }
   
   &:active:not(:disabled) {
@@ -122,80 +125,131 @@ const Button = styled.button`
   }
 `;
 
-const DangerButton = styled(Button)`
-  color: #ff4444;
-  border-color: #ff4444;
-  
-  &:hover:not(:disabled) {
-    background: #ff4444;
-    color: #000;
-    box-shadow: 0 2px 8px rgba(255, 68, 68, 0.3);
-  }
+
+const PeersGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
 `;
 
-const PeerIdContainer = styled.div`
+const PeerBlock = styled.div`
+  background: #0f0f0f;
+  border: 2px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 20px;
   display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-  align-items: stretch;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   position: relative;
+  transition: all 0.2s ease;
+  cursor: default;
   
-  &::before {
-    content: '';
-    position: absolute;
-    left: -12px;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: linear-gradient(to bottom, #00ff88, transparent);
-    opacity: 0.3;
+  &:hover {
+    border-color: #3a3a3a;
+    background: #121212;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   }
 `;
 
-const PeerIndex = styled.div`
+const PeerIcon = styled.div`
+  width: 48px;
+  height: 48px;
+  background: #1a1a1a;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  color: #444;
-  min-width: 24px;
-  user-select: none;
+  color: #00ff88;
 `;
 
-const PeerIdField = styled(Input)`
-  flex: 1;
+const PeerId = styled.div`
+  font-size: 13px;
+  color: #e0e0e0;
+  text-align: center;
+  font-weight: 500;
+  word-break: break-all;
+`;
+
+const RemoveButton = styled.button`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: #2a2a2a;
+  color: #ff5555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s ease;
+  
+  ${PeerBlock}:hover & {
+    opacity: 1;
+  }
+  
+  &:hover {
+    background: #ff5555;
+    color: #000000;
+  }
 `;
 
 const RandomButton = styled(Button)`
-  padding: 10px 12px;
-  font-size: 11px;
+  padding: 12px 16px;
+  font-size: 12px;
 `;
 
-const AddButton = styled(Button)`
-  width: 100%;
-  margin-top: 16px;
+const AddPeerBlock = styled(PeerBlock)`
   border-style: dashed;
+  cursor: pointer;
+  background: #0a0a0a;
   
-  &:hover:not(:disabled) {
+  &:hover {
     border-style: solid;
+    border-color: #00ff88;
+    background: #0f0f0f;
   }
+`;
+
+const AddIcon = styled.div`
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #00ff88;
+`;
+
+const AddLabel = styled.div`
+  font-size: 12px;
+  color: #808080;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
 `;
 
 const StatusBar = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid #1a1a1a;
-  font-size: 11px;
-  color: #444;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid #2a2a2a;
+  font-size: 12px;
+  color: #808080;
 `;
 
 const StatusItem = styled.span`
   display: flex;
   align-items: center;
   gap: 6px;
+  font-weight: 500;
   
   &::before {
     content: '●';
@@ -233,12 +287,7 @@ export const ConfigUI: React.FC<ConfigUIProps> = ({ onConfigChange }) => {
     }
   };
 
-  const handlePeerIdChange = (index: number, value: string) => {
-    const newPeerIds = [...peerIds];
-    newPeerIds[index] = value;
-    setPeerIds(newPeerIds);
-    triggerConfigChange({ peerIds: newPeerIds });
-  };
+  // Peer IDs are now auto-generated and not editable
 
   const generateRandomRoomId = () => {
     return `room-${Math.random().toString(36).substring(2, 9)}`;
@@ -293,27 +342,28 @@ export const ConfigUI: React.FC<ConfigUIProps> = ({ onConfigChange }) => {
       <Section>
         <Label>Peer Configuration</Label>
 
-        {peerIds.map((peerId, index) => (
-          <PeerIdContainer key={index}>
-            <PeerIndex>{String(index).padStart(2, '0')}</PeerIndex>
-            <PeerIdField
-              value={peerId}
-              onChange={(e) => handlePeerIdChange(index, e.target.value)}
-              placeholder={`peer-${index + 1}`}
-              disabled={true}
-              spellCheck={false}
-            />
-            {peerIds.length > 1 && (
-              <DangerButton onClick={() => handleRemovePeer(index)}>
-                ×
-              </DangerButton>
-            )}
-          </PeerIdContainer>
-        ))}
-        
-        <AddButton onClick={handleAddPeer}>
-          + Add Peer
-        </AddButton>
+        <PeersGrid>
+          {peerIds.map((peerId, index) => (
+            <PeerBlock key={index}>
+              {peerIds.length > 1 && (
+                <RemoveButton onClick={() => handleRemovePeer(index)}>
+                  <Xmark width={14} height={14} />
+                </RemoveButton>
+              )}
+              <PeerIcon>
+                <User width={28} height={28} />
+              </PeerIcon>
+              <PeerId>{peerId || `peer-${index + 1}`}</PeerId>
+            </PeerBlock>
+          ))}
+          
+          <AddPeerBlock onClick={handleAddPeer}>
+            <AddIcon>
+              <Plus width={32} height={32} />
+            </AddIcon>
+            <AddLabel>Add Peer</AddLabel>
+          </AddPeerBlock>
+        </PeersGrid>
       </Section>
       
       <StatusBar>

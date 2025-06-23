@@ -3,9 +3,9 @@ import * as Nuqs from "nuqs";
 import { ConfigUI } from './ConfigUI';
 import { createGlobalStyle } from 'styled-components';
 
-const backgroundColor = 'rgb(255, 243, 243)';
-const gridColor = 'rgba(0,0,0, 0.02)';
-const gridSize = '10px';
+const backgroundColor = '#0a0a0a';
+const gridColor = 'rgba(255, 255, 255, 0.03)';
+const gridSize = '20px';
 
 const GlobalStyle = createGlobalStyle`
   body {

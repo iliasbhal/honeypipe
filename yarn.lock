@@ -2081,6 +2081,11 @@ https-proxy-agent@^7.0.6:
     agent-base "^7.1.2"
     debug "4"
 
+iconoir-react@^7.11.0:
+  version "7.11.0"
+  resolved "https://registry.yarnpkg.com/iconoir-react/-/iconoir-react-7.11.0.tgz#6456409e87a3c6cd1494eb25fadcb13179d15bc6"
+  integrity sha512-uvTKtnHYwbbTsmQ6HCcliYd50WK0GbjP497RwdISxKzfS01x4cK1Mn/F2mT/t2roSaJQ0I+KnHxMcyvmNMXWsQ==
+
 iconv-lite@0.6.3, iconv-lite@^0.6.3:
   version "0.6.3"
   resolved "https://registry.npmjs.org/iconv-lite/-/iconv-lite-0.6.3.tgz"

@@ -3,12 +3,22 @@ import * as Nuqs from "nuqs";
 import { ConfigUI } from './ConfigUI';
 import { createGlobalStyle } from 'styled-components';
 
+const backgroundColor = 'rgb(255, 243, 243)';
+const gridColor = 'rgba(0,0,0, 0.02)';
+const gridSize = '10px';
+
 const GlobalStyle = createGlobalStyle`
   body {
     margin: 0;
     padding: 0;
-    background: #000000;
+    background-color: ${backgroundColor};
+    background-image: 
+      linear-gradient(${gridColor} 1px, transparent 1px),
+      linear-gradient(90deg, ${gridColor} 1px, transparent 1px);
+    background-size: ${gridSize} ${gridSize};
+    background-position: -1px -1px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    min-height: 100vh;
   }
   
   * {
@@ -45,13 +55,7 @@ export const App = () => {
   return (
     <>
       <GlobalStyle />
-      <div style={{ 
-        minHeight: '100vh', 
-        background: '#000000',
-        padding: '20px 0'
-      }}>
-        <ConfigUI onConfigChange={handleConfigChange} />
-      </div>
+      <ConfigUI onConfigChange={handleConfigChange} />
     </>
   );
 }

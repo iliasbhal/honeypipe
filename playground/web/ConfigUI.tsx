@@ -171,53 +171,6 @@ const RandomButton = styled(Button)`
   font-size: 11px;
 `;
 
-const CheckboxContainer = styled.label`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 16px 0;
-  cursor: pointer;
-  font-size: 12px;
-  color: #999;
-  transition: color 0.2s ease;
-  
-  &:hover {
-    color: #e0e0e0;
-  }
-`;
-
-const Checkbox = styled.input.attrs({ type: 'checkbox' })`
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border: 1px solid #333;
-  border-radius: 3px;
-  background: #0f0f0f;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-  
-  &:checked {
-    background: #00ff88;
-    border-color: #00ff88;
-    
-    &::after {
-      content: '✓';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: #000;
-      font-size: 10px;
-      font-weight: bold;
-    }
-  }
-  
-  &:hover {
-    border-color: #00ff88;
-  }
-`;
-
 const AddButton = styled(Button)`
   width: 100%;
   margin-top: 16px;
@@ -287,10 +240,6 @@ export const ConfigUI: React.FC<ConfigUIProps> = ({ onConfigChange }) => {
     triggerConfigChange({ peerIds: newPeerIds });
   };
 
-  const generateRandomId = () => {
-    return `peer-${Math.random().toString(36).substring(2, 9)}`;
-  };
-
   const generateRandomRoomId = () => {
     return `room-${Math.random().toString(36).substring(2, 9)}`;
   };
@@ -312,6 +261,7 @@ export const ConfigUI: React.FC<ConfigUIProps> = ({ onConfigChange }) => {
         roomId,
         peerCount: peerIds.length,
         peerIds,
+        autoGenerateIds: false,
         ...updates
       });
     }

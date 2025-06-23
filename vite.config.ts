@@ -15,7 +15,7 @@ import packageJSON from './package.json'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  root: './playground',
+  root: './playground/web',
   plugins: [
     react(),
     apiPlugin({

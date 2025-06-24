@@ -128,18 +128,22 @@ export class RemotePeer<MessageType = any> extends EventEmitter<RemotePeerEvents
   /**
  * Join the room
  */
+  connectionInitialized = false;
   connect() {
+    if (this.connectionInitialized) return;
+
     this.listenToPeerSignals();
 
-    if (this.isInitiator()) {
+    const isInitiator = this.isInitiator();
+    if (isInitiator) {
       this.sendSdpOffer();
     }
+
+    this.connectionInitialized = true;
   }
 
   ensureConnected() {
-    // if (this.isInitiator()) {
-    //   this.sendSdpOffer();
-    // }
+    return this.connect();
   }
 
   /**

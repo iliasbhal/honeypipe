@@ -135,7 +135,7 @@ export class RoomConnection<MessageType = any> extends EventEmitter<RoomConnecti
       this.emit('receivedSignal', event);
       if (isLeaveEvent) peer.disconnect();
       if (isJoinEvent) peer.connect();
-      // if (isAliveEvent) peer.ensureConnected();
+      if (isAliveEvent) peer.ensureConnected();
     }
 
     this.stateByPeer.set(peer, event.type);

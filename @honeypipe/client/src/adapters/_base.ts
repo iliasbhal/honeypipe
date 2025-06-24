@@ -3,7 +3,11 @@ export type SignalingEvent = {
   peerId: string;
 } & ({
   roomId: string;
-  type: 'join' | 'leave' | 'alive';
+  type: 'join';
+  sdpOffer?: RTCSessionDescriptionInit; // SDP offer included in join
+} | {
+  roomId: string;
+  type: 'leave' | 'alive';
 } | {
   channelId: string;
   type: 'sdpOffer' | 'sdpAnswer';

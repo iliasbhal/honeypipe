@@ -7,9 +7,9 @@
     "playground"
   ],
   "scripts": {
-    "dev": "yarn workspace playground dev",
-    "build": "yarn workspace @honeypipe/client build",
-    "test": "yarn workspace @honeypipe/client test"
+    "dev": "yarn playground dev",
+    "playground": "yarn workspace playground",
+    "client": "yarn workspace @honeypipe/client"
   },
   "devDependencies": {
     "typescript": "^5.5.3"

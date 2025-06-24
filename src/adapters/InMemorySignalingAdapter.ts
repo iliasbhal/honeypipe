@@ -11,15 +11,14 @@ export class InMemorySignalingAdapter implements SignalingAdapter {
   /**
    * Push an event to a channel timeline
    */
-  async push(event: SignalingEvent): Promise<number> {
+  async push(event: SignalingEvent): Promise<void> {
 
     const redisKey = 'channelId' in event
       ? `channel:${event.channelId}:timeline`
       : `room:${event.roomId}:timeline`;
 
     // Push event to the end of the list and get the new length (which becomes the index)
-    const newLength = await this.redis.rpush(redisKey, JSON.stringify(event));
-    return newLength;
+    await this.redis.rpush(redisKey, JSON.stringify(event));
   }
 
   /**

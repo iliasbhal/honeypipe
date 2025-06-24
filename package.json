@@ -1,72 +1,17 @@
 {
-  "name": "honeypipe",
-  "version": "0.0.3",
-  "description": "It's actually very very easy to do WebRTC",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
-    }
-  },
-  "files": [
-    "dist"
+  "name": "honeypipe-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "@honeypipe/*",
+    "playground"
   ],
-  "author": "ilias.bhal@gmail.com",
-  "license": "MIT",
-  "type": "module",
   "scripts": {
-    "dev": "vite",
-    "test": "vitest",
-    "build": "tsup",
-    "prepublishOnly": "npm run build"
-  },
-  "dependencies": {
-    "@number-flow/react": "^0.5.10",
-    "@types/simple-peer": "^9.11.8",
-    "convex": "^1.24.8",
-    "iconoir-react": "^7.11.0",
-    "ink": "4.4.1",
-    "ioredis-mock": "^8.9.0",
-    "motion": "^12.16.0",
-    "nuqs": "^2.4.3",
-    "simple-peer": "^9.11.1",
-    "superjson": "^2.2.2",
-    "uuid": "^11.1.0",
-    "xstate": "^5.19.4"
+    "dev": "yarn workspace playground dev",
+    "build": "yarn workspace @honeypipe/client build",
+    "test": "yarn workspace @honeypipe/client test"
   },
   "devDependencies": {
-    "@eslint/js": "^9.9.0",
-    "@phosphor-icons/react": "^2.1.7",
-    "@types/ioredis-mock": "^8.2.6",
-    "@types/jest": "^29.5.14",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react-swc": "^3.5.0",
-    "eslint": "^9.9.0",
-    "eslint-plugin-react-hooks": "^5.1.0-rc.0",
-    "eslint-plugin-react-refresh": "^0.4.9",
-    "express": "^5.1.0",
-    "framer": "^2.4.1",
-    "framer-motion": "^11.5.6",
-    "globals": "^15.9.0",
-    "ioredis": "^5.6.1",
-    "jsdom": "^26.1.0",
-    "prettier": "^3.5.3",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-tippy": "^1.4.0",
-    "styled-components": "^6.1.13",
-    "tsup": "^8.5.0",
-    "tsx": "^4.20.3",
-    "typescript": "^5.5.3",
-    "typescript-eslint": "^8.0.1",
-    "vite": "^6.3.5",
-    "vite-plugin-externalize-dependencies": "^1.0.1",
-    "vitest": "^3.2.3",
-    "wrtc": "^0.4.7"
+    "typescript": "^5.5.3"
   }
 }

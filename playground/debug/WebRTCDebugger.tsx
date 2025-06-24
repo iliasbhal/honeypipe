@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Peer } from '../../src/Peer';
+import { Peer } from '@honeypipe/client';
 
 interface Message {
   id: string;

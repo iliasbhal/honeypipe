@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Peer } from '../../src/Peer';
-import { Channel } from '../../src/Channel';
-import { InMemorySignalingAdapter } from '../../src/adapters/InMemorySignalingAdapter';
+import { Peer } from '@honeypipe/client';
+import { InMemorySignalingAdapter } from '@honeypipe/client';
 import { WebRTCDebugger } from './WebRTCDebugger';
 import { motion, AnimatePresence } from 'framer-motion';
   

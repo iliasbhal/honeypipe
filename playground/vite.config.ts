@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import { apiPlugin } from './plugins/apiPlugin';
 
-import { app } from './playground/server'
+import { app } from './server'
 
 import packageJSON from './package.json'
 
@@ -15,7 +15,7 @@ import packageJSON from './package.json'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  root: './playground/web',
+  root: './web',
   plugins: [
     react(),
     apiPlugin({

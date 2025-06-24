@@ -2,7 +2,7 @@ import React from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowDown, Circle, CheckCircle, WarningCircle, Wifi, WifiOff, NavArrowDown, NavArrowRight, Send } from 'iconoir-react';
-import { Peer, BroadcastChannelAdapter, RemotePeer } from '../../src';
+import { Peer, BroadcastChannelAdapter, RemotePeer } from '@honeypipe/client';
 
 const Container = styled.div`
   font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;

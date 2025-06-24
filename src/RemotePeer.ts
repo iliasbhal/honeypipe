@@ -4,12 +4,13 @@ import { Room } from './Room';
 import { wait } from './utils/wait';
 import * as superJSON from 'superjson'
 import { EventEmitter } from './utils/EventEmitter';
+import { v7 as uuidv7 } from 'uuid';
 
 /**
  * RemotePeer provides channel-specific operations for a peer
  * Created via peer.via(channel)
  */
-export class RemotePeer<MessageType = any> {
+export class RemotePeer<MessageType = any> extends EventEmitter<RemotePeerEvents> {
   __type!: MessageType;
   private roomConnection: RemotePeerConfig['roomConnection'];
   private localPeerId: RemotePeerConfig['localPeerId'];
@@ -18,11 +19,6 @@ export class RemotePeer<MessageType = any> {
   private peerConnection: RTCPeerConnection | null = null;
   private dataChannel: RTCDataChannel | null = null;
   private signalingEvents: SignalingEvent[] = [];
-
-  private eventEmitter = new EventEmitter<RemotePeerEvents>();
-  get on() { return this.eventEmitter.on.bind(this.eventEmitter) as typeof this.eventEmitter.on; }
-  get off() { return this.eventEmitter.off.bind(this.eventEmitter) as typeof this.eventEmitter.off; }
-  get emit() { return this.eventEmitter.emit.bind(this.eventEmitter) as typeof this.eventEmitter.emit; }
 
   static getChannelId(peerId1: string, peerId2: string, roomId: string) {
     if (peerId1 === peerId2) {
@@ -38,6 +34,8 @@ export class RemotePeer<MessageType = any> {
   }
 
   constructor(config: RemotePeerConfig) {
+    super();
+
     this.localPeerId = config.localPeerId;
     this.otherPeerId = config.otherPeerId;
     this.roomConnection = config.roomConnection;
@@ -64,6 +62,7 @@ export class RemotePeer<MessageType = any> {
         case 'icecandidate':
           if (!event.candidate) return;
           this.sendSignal({
+            id: uuidv7(),
             peerId: this.localPeerId,
             channelId: this.channelId,
             type: 'iceCandidate',
@@ -227,7 +226,7 @@ export class RemotePeer<MessageType = any> {
 
     // Wait for the data channel to open
     return new Promise<void>((resolve) => {
-      const onDataChannel = this.eventEmitter.on('dataChannel', ({ dataChannel }) => {
+      const onDataChannel = this.on('dataChannel', ({ dataChannel }) => {
         const isOpen = dataChannel.readyState === 'open';
         if (isOpen) {
           resolve();
@@ -361,6 +360,7 @@ export class RemotePeer<MessageType = any> {
     peerConnection.setLocalDescription(offer);
 
     this.sendSignal({
+      id: uuidv7(),
       peerId: this.localPeerId,
       channelId: this.channelId,
       type: 'sdpOffer',
@@ -370,6 +370,7 @@ export class RemotePeer<MessageType = any> {
 
   async sendSdpRestart() {
     this.sendSignal({
+      id: uuidv7(),
       peerId: this.localPeerId,
       channelId: this.channelId,
       type: 'sdpRestart'
@@ -401,6 +402,7 @@ export class RemotePeer<MessageType = any> {
     await peerConnection.setLocalDescription(answer);
 
     this.sendSignal({
+      id: uuidv7(),
       peerId: this.localPeerId,
       channelId: this.channelId,
       type: 'sdpAnswer',

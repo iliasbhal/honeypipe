@@ -21,6 +21,7 @@
     "nuqs": "^2.4.3",
     "simple-peer": "^9.11.1",
     "superjson": "^2.2.2",
+    "uuid": "^11.1.0",
     "xstate": "^5.19.4"
   },
   "devDependencies": {

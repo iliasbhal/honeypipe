@@ -1,22 +1,21 @@
 export type SignalingEvent = {
+  id: string;
   peerId: string;
+} & ({
   roomId: string;
   type: 'join' | 'leave' | 'alive';
 } | {
-  peerId: string;
   channelId: string;
   type: 'sdpOffer' | 'sdpAnswer';
   data: RTCSessionDescriptionInit;
 } | {
-  peerId: string;
   channelId: string;
   type: 'sdpRestart';
 } | {
-  peerId: string;
   channelId: string;
   type: 'iceCandidate';
   data: RTCIceCandidateInit;
-}
+})
 
 export type SignalPullRequest = {
   roomId: string;

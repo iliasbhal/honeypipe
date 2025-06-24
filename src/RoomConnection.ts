@@ -5,6 +5,7 @@ import { RemotePeer } from './RemotePeer';
 import { SignalingEvent } from './adapters/_base';
 import { wait } from './utils/wait';
 import { EventEmitter } from './utils/EventEmitter';
+import { v7 as uuidv7 } from 'uuid';
 
 export type RoomMessageHandler = (message: { from: RemotePeer, content: string }) => void;
 export type RoomPresenceHandler = (remotePeer: RemotePeer) => void;
@@ -18,16 +19,11 @@ interface RoomConnectionEvents {
  * PeerRoom provides room-specific operations for a peer
  * Created via peer.via(room)
  */
-export class RoomConnection<MessageType = any> {
+export class RoomConnection<MessageType = any> extends EventEmitter<RoomConnectionEvents> {
   peer: Peer;
   room: Room;
   private remotePeers = new Map<string, RemotePeer>();
   private stateByPeer = new Map<Peer | RemotePeer, SignalingEvent['type']>();
-
-  private eventEmitter = new EventEmitter<RoomConnectionEvents>();
-  get on() { return this.eventEmitter.on.bind(this.eventEmitter) as typeof this.eventEmitter.on; }
-  get off() { return this.eventEmitter.off.bind(this.eventEmitter) as typeof this.eventEmitter.off; }
-  get emit() { return this.eventEmitter.emit.bind(this.eventEmitter) as typeof this.eventEmitter.emit; }
 
   get joined() {
     const state = this.stateByPeer.get(this.peer);
@@ -35,6 +31,8 @@ export class RoomConnection<MessageType = any> {
   }
 
   constructor(peer: Peer, room: Room) {
+    super();
+
     this.peer = peer;
     this.room = room;
   }
@@ -71,6 +69,7 @@ export class RoomConnection<MessageType = any> {
         this.peerSingalLoop.joinSignalCount += 1;
 
         const signalEvent = {
+          id: uuidv7(),
           roomId: this.room.id,
           peerId: this.peer.id,
           type: isJoin ? 'join' : 'alive',
@@ -96,13 +95,13 @@ export class RoomConnection<MessageType = any> {
           offsetIndex: this.peerSingalLoop.pullOffsetIndex,
         });
 
-        console.log('pulling room events', this.peer.id, this.room.id, {
-          events,
-          all: await this.room.signalingAdapter.pull({
-            roomId: this.room.id,
-            offsetIndex: 0,
-          }),
-        });
+        // console.log('pulling room events', this.peer.id, this.room.id, {
+        //   events,
+        //   all: await this.room.signalingAdapter.pull({
+        //     roomId: this.room.id,
+        //     offsetIndex: 0,
+        //   }),
+        // });
 
         for (const event of events) {
           this.processSignalingEvent(event);
@@ -209,6 +208,7 @@ export class RoomConnection<MessageType = any> {
     this.stateByPeer.clear();
 
     this.room.signalingAdapter.push({
+      id: uuidv7(),
       roomId: this.room.id,
       peerId: this.peer.id,
       type: 'leave',

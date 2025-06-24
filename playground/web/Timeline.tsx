@@ -63,7 +63,7 @@ const InfoItem = styled.div`
 
 const TimelineContainer = styled.div`
   position: relative;
-  padding: 20px 20px 20px 44px;
+  padding: 20px;
   flex: 1;
 
   overflow-y: auto;
@@ -99,29 +99,6 @@ const TimelineLine = styled.div`
 const EventItem = styled(motion.div)<{ type: string }>`
   position: relative;
   margin-bottom: 16px;
-  padding-left: 24px;
-`;
-
-const EventDot = styled.div<{ type: string }>`
-  position: absolute;
-  left: -12px;
-  top: 4px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #1a1a1a;
-  border: 2px solid ${props => {
-    switch(props.type) {
-      case 'success': return '#00ff88';
-      case 'error': return '#ff5555';
-      case 'warning': return '#ffaa00';
-      case 'info': return '#00aaff';
-      default: return '#808080';
-    }
-  }};
-  display: flex;
-  align-items: center;
-  justify-content: center;
 `;
 
 const EventContent = styled.div`
@@ -726,7 +703,6 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
       </Header>
       
       <TimelineContainer>
-        <TimelineLine />
         <AnimatePresence>
           {[...events].reverse().map((event) => (
             <EventItem 
@@ -742,9 +718,6 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
               }}
               layout
             >
-              <EventDot type={event.type}>
-                {getEventIcon(event.eventType)}
-              </EventDot>
               <EventContent 
                 onClick={(e) => {
                   e.stopPropagation();

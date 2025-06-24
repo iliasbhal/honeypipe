@@ -21,6 +21,7 @@ export class RemotePeer<MessageType = any> {
 
   private eventEmitter = new EventEmitter<RemotePeerEvents>();
   get on() { return this.eventEmitter.on.bind(this.eventEmitter) as typeof this.eventEmitter.on; }
+  get off() { return this.eventEmitter.off.bind(this.eventEmitter) as typeof this.eventEmitter.off; }
   get emit() { return this.eventEmitter.emit.bind(this.eventEmitter) as typeof this.eventEmitter.emit; }
 
   static getChannelId(peerId1: string, peerId2: string, roomId: string) {
@@ -50,10 +51,11 @@ export class RemotePeer<MessageType = any> {
    */
   private setupEventHandlers() {
     // Peer connection event handlers
-    this.on('peerConnection', ({ type, event }) => {
+    this.on('peerConnection', ({ type, event, peerConnection }) => {
       // console.log('peerConnection', type, this.localPeerId, '->', this.otherPeerId);
       switch (type) {
         case 'connectionstatechange':
+
           break;
         case 'datachannel':
           this.dataChannel = event.channel;
@@ -61,12 +63,25 @@ export class RemotePeer<MessageType = any> {
           break;
         case 'icecandidate':
           if (!event.candidate) return;
-          this.room.signalingAdapter.push({
+          this.sendSignal({
             peerId: this.localPeerId,
             channelId: this.channelId,
             type: 'iceCandidate',
             data: event.candidate,
           });
+          break;
+        case 'icecandidateerror':
+          break;
+        case 'iceconnectionstatechange':
+
+          break;
+        case 'icegatheringstatechange':
+          break;
+        case 'negotiationneeded':
+          break;
+        case 'signalingstatechange':
+          break;
+        case 'track':
           break;
       }
     });
@@ -78,11 +93,15 @@ export class RemotePeer<MessageType = any> {
         case 'message':
           this.roomConnection.emitMessage(this.id, event.data);
           break;
-        case 'open': ;
+        case 'open':
           break;
         case 'close':
           break;
         case 'error':
+          break;
+        case 'closing':
+          break;
+        case 'bufferedamountlow':
           break;
       }
     });
@@ -118,6 +137,12 @@ export class RemotePeer<MessageType = any> {
     }
   }
 
+  ensureConnected() {
+    // if (this.isInitiator()) {
+    //   this.sendSdpOffer();
+    // }
+  }
+
   /**
    * Leave the room
    */
@@ -136,7 +161,6 @@ export class RemotePeer<MessageType = any> {
       started: false,
       abortController: new AbortController(),
       offerSignalCount: 0,
-      pullOffsetIndex: 0,
     };
   }
 
@@ -222,6 +246,7 @@ export class RemotePeer<MessageType = any> {
 
 
   listenToPeerSignals() {
+    // console.log('Pulling signals', this.localPeerId, '->', this.otherPeerId);
     if (this.peerSingalLoop.started) {
       return;
     }
@@ -239,15 +264,16 @@ export class RemotePeer<MessageType = any> {
       const maxWaitTime = 5000; // Cap at 5 seconds
 
       while (!abortSignal.aborted) {
+
         const events = await this.room.signalingAdapter.pull({
           channelId: this.channelId,
-          offsetIndex: this.peerSingalLoop.pullOffsetIndex,
+          offsetIndex: this.signalingEvents.length,
         });
 
+        // console.log('pulling events (channel)', this.localPeerId, '->', this.otherPeerId, events);
         for (const event of events) {
           this.signalingEvents.push(event);
           this.processSignalingEvent(event);
-          this.peerSingalLoop.pullOffsetIndex += 1;
         }
 
         const hasEvents = events.length > 0;
@@ -255,6 +281,24 @@ export class RemotePeer<MessageType = any> {
         await wait(waitTime);
       }
     })
+
+    // setInterval(() => {
+    //   if (!this.isInitiator()) {
+    //     return;
+    //   }
+
+    //   console.log('INTERVAL', {
+    //     dataChannel: {
+    //       readyState: this.dataChannel?.readyState,
+    //     },
+    //     peerConnection: {
+    //       iceConnectionState: this.peerConnection?.iceConnectionState,
+    //       iceGatheringState: this.peerConnection?.iceGatheringState,
+    //       signalingState: this.peerConnection?.signalingState,
+    //       connectionState: this.peerConnection?.connectionState,
+    //     },
+    //   });
+    // }, 1000);
   }
 
   private stopPeerSignalLoop() {
@@ -284,7 +328,7 @@ export class RemotePeer<MessageType = any> {
       peerConnection.addEventListener(eventType, (event) => {
         // @ts-expect-error
         this.emit('peerConnection', {
-          peerConnection: this.peerConnection!,
+          peerConnection,
           type: eventType,
           event
         });
@@ -295,39 +339,46 @@ export class RemotePeer<MessageType = any> {
   }
 
   async processSignalingEvent(event: SignalingEvent) {
+
     const isOwnEvent = event.peerId === this.localPeerId;
     if (isOwnEvent) return;
 
+    // Show all received signals in the timeline
+    if (event.type === 'iceCandidate') return this.handleIceCandidate(event.data);
     if (event.type === 'sdpOffer') return this.handleSdpOffer(event.data);
     if (event.type === 'sdpAnswer') return this.handleSdpAnswer(event.data);
     if (event.type === 'sdpRestart') return this.reconnect();
 
-    if (event.type === 'iceCandidate') return this.handleIceCandidate(event.data);
+    this.emit('receivedSignal', event);
   }
 
   async sendSdpOffer() {
     const peerConnection = this.getChannelPeerConnection();
-
     this.dataChannel = peerConnection.createDataChannel('default');
     this.setupDataChannel(this.dataChannel);
 
     const offer = await peerConnection.createOffer({});
     peerConnection.setLocalDescription(offer);
 
-    this.room.signalingAdapter.push({
+    this.sendSignal({
       peerId: this.localPeerId,
       channelId: this.channelId,
       type: 'sdpOffer',
       data: offer,
-    })
+    });
   }
 
   async sendSdpRestart() {
-    this.room.signalingAdapter.push({
+    this.sendSignal({
       peerId: this.localPeerId,
       channelId: this.channelId,
-      type: 'sdpRestart',
+      type: 'sdpRestart'
     })
+  }
+
+  sendSignal(signalEvent: SignalingEvent) {
+    this.emit('sentSignal', signalEvent);
+    this.room.signalingAdapter.push(signalEvent)
   }
 
   async handleIceCandidate(iceCandidate: RTCIceCandidateInit) {
@@ -349,7 +400,7 @@ export class RemotePeer<MessageType = any> {
     const answer = await peerConnection.createAnswer({});
     await peerConnection.setLocalDescription(answer);
 
-    await this.room.signalingAdapter.push({
+    this.sendSignal({
       peerId: this.localPeerId,
       channelId: this.channelId,
       type: 'sdpAnswer',
@@ -361,8 +412,17 @@ export class RemotePeer<MessageType = any> {
 
   async handleSdpAnswer(sdpAnswer: RTCSessionDescriptionInit) {
     // console.log(this.localPeerId, 'handle sdpAnswer', this.otherPeerId);
+
     const peerConnection = this.getChannelPeerConnection();
     peerConnection.setRemoteDescription(sdpAnswer);
+
+
+    // If the peer connection is new, we need to re-send an offer
+    const isNewConnection = this.peerConnection?.connectionState === 'new';
+    if (isNewConnection) {
+      this.sendSdpOffer();
+    };
+
     // console.log(this.localPeerId, 'handle sdpAnswer done');
   }
 
@@ -413,6 +473,8 @@ type PeerConnectionEvent<U extends keyof RTCPeerConnectionEventMap> = U extends 
 } : never;
 
 interface RemotePeerEvents {
+  receivedSignal: SignalingEvent;
+  sentSignal: SignalingEvent;
   dataChannel: DataChannelEvent<keyof RTCDataChannelEventMap>;
   peerConnection: PeerConnectionEvent<keyof RTCPeerConnectionEventMap>;
 }

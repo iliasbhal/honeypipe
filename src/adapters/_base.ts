@@ -27,7 +27,7 @@ export type SignalPullRequest = {
 }
 
 export interface SignalingAdapter {
-  push(event: SignalingEvent): Promise<number>;
+  push(event: SignalingEvent): Promise<void>;
   pull(request: SignalPullRequest): Promise<SignalingEvent[]>;
   close(): Promise<void>;
   getRtcConfiguration(): RTCConfiguration;

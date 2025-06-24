@@ -1,30 +1,57 @@
 import { SignalingEvent, SignalingAdapter, SignalPullRequest } from './_base';
+import { wait } from '../utils/wait';
+
+
 
 export class BroadcastChannelAdapter implements SignalingAdapter {
-  private channel = new BroadcastChannel('honeypipe');
-  items: SignalingEvent[] = [];
+  static channel = new BroadcastChannel('honeypipe');
+  private channel = BroadcastChannelAdapter.channel;
+  eventsByKey = new Map<string, SignalingEvent[]>();
 
   constructor() {
     this.channel.addEventListener('message', (event) => {
-      this.items.push(event.data);
+      console.log('received message', event.data);
+      const signal = event.data as SignalingEvent;
+      this.pushLocalSignal(signal);
     })
+  }
+
+  private getSignalKey(signal: SignalingEvent | SignalPullRequest) {
+    return 'channelId' in signal ? signal.channelId : signal.roomId;
+  }
+
+  private pushLocalSignal(signal: SignalingEvent) {
+    const events = this.getEventsBucketFor(signal);
+    events.push(signal);
+  }
+
+  private getEventsBucketFor(signal: SignalingEvent | SignalPullRequest) {
+    const key = this.getSignalKey(signal);
+    const events = this.eventsByKey.get(key) || [];
+    this.eventsByKey.set(key, events);
+    return events;
   }
 
   /**
    * Push an event to a channel timeline
    */
-  async push(event: SignalingEvent): Promise<number> {
-    this.items.push(event);
+  async push(event: SignalingEvent) {
     this.channel.postMessage(event);
-    return this.items.length;
+    this.pushLocalSignal(event);
+
+    await wait(100);
   }
 
   /**
    * Pull all events from a channel timeline since a given offset
    */
   async pull(request: SignalPullRequest): Promise<SignalingEvent[]> {
-    const events = this.items.slice(request.offsetIndex || 0);
-    return events;
+    await wait(500);
+
+    const events = this.getEventsBucketFor(request);
+    const eventsToReturn = events.slice(request.offsetIndex || 0);
+    console.log('pullpull', request, this.eventsByKey);
+    return eventsToReturn;
   }
 
   /**

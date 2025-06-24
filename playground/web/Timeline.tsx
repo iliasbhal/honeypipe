@@ -290,20 +290,48 @@ const DataChannelTitle = styled.h3`
   }
 `;
 
-const ConnectionStatusList = styled.div`
+const ChannelsList = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
+  flex-direction: column;
+  gap: 12px;
 `;
 
-const ConnectionStatus = styled.div<{ state: string }>`
+const ChannelRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+`;
+
+const ChannelInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+`;
+
+const ChannelLabel = styled.div`
+  font-size: 12px;
+  font-weight: 600;
+  color: #f0f0f0;
+`;
+
+const ChannelPeerId = styled.div`
+  font-size: 10px;
+  color: #808080;
+  font-family: monospace;
+`;
+
+const ChannelStatus = styled.div<{ state: string }>`
   font-size: 11px;
   padding: 4px 8px;
   border-radius: 4px;
   background: ${props => {
     switch(props.state) {
-      case 'connected': return '#00ff8820';
+      case 'open': return '#00ff8820';
       case 'connecting': return '#ffaa0020';
       case 'failed': 
       case 'closed': return '#ff555520';
@@ -312,7 +340,7 @@ const ConnectionStatus = styled.div<{ state: string }>`
   }};
   border: 1px solid ${props => {
     switch(props.state) {
-      case 'connected': return '#00ff8840';
+      case 'open': return '#00ff8840';
       case 'connecting': return '#ffaa0040';
       case 'failed':
       case 'closed': return '#ff555540';
@@ -321,28 +349,31 @@ const ConnectionStatus = styled.div<{ state: string }>`
   }};
   color: ${props => {
     switch(props.state) {
-      case 'connected': return '#00ff88';
+      case 'open': return '#00ff88';
       case 'connecting': return '#ffaa00';
       case 'failed':
       case 'closed': return '#ff5555';
       default: return '#808080';
     }
   }};
+  min-width: 80px;
+  text-align: center;
 `;
 
-const MessageInputContainer = styled.div`
+const ChannelInputContainer = styled.div`
   display: flex;
   gap: 8px;
   align-items: center;
+  flex: 1;
 `;
 
-const MessageInput = styled.input`
+const ChannelInput = styled.input`
   flex: 1;
-  background: #1a1a1a;
+  background: #0f0f0f;
   border: 1px solid #2a2a2a;
   border-radius: 6px;
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: 12px;
   color: #f0f0f0;
   font-family: inherit;
   transition: all 0.2s ease;
@@ -350,7 +381,7 @@ const MessageInput = styled.input`
   &:focus {
     outline: none;
     border-color: #00aaff;
-    background: #1e1e1e;
+    background: #121212;
   }
   
   &::placeholder {
@@ -363,19 +394,17 @@ const MessageInput = styled.input`
   }
 `;
 
-const SendButton = styled.button`
+const ChannelSendButton = styled.button`
   background: #00aaff;
   border: none;
   border-radius: 6px;
-  padding: 8px 16px;
+  padding: 6px 12px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  justify-content: center;
+  font-size: 11px;
   font-weight: 600;
   color: #0a0a0a;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   cursor: pointer;
   transition: all 0.2s ease;
   
@@ -394,34 +423,11 @@ const SendButton = styled.button`
   }
 `;
 
-const ChannelSelector = styled.select`
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
-  padding: 8px 12px;
+const NoChannelsMessage = styled.div`
+  text-align: center;
+  padding: 24px;
+  color: #606060;
   font-size: 13px;
-  color: #f0f0f0;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 200px;
-  
-  &:focus {
-    outline: none;
-    border-color: #00aaff;
-    background: #1e1e1e;
-  }
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  
-  option {
-    background: #1a1a1a;
-    color: #f0f0f0;
-    padding: 8px;
-  }
 `;
 
 interface TimelineEvent {
@@ -446,9 +452,8 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
   const [peer] = React.useState(() => new Peer({ peerId }));
   const [room] = React.useState(() => new Peer.Room(roomId, new BroadcastChannelAdapter()));
   const eventIdCounter = React.useRef(0);
-  const [messageInput, setMessageInput] = React.useState('');
+  const [channelInputs, setChannelInputs] = React.useState<Map<string, string>>(new Map());
   const [dataChannels, setDataChannels] = React.useState<Map<string, { channel: RTCDataChannel, state: string, peer: RemotePeer, label?: string }>>(new Map());
-  const [selectedChannelId, setSelectedChannelId] = React.useState<string>('all');
 
   // Helper function to add events to timeline
   const addEvent = (type: 'success' | 'error' | 'warning' | 'info', eventType: string, source: 'DataChannel' | 'PeerConnection' | 'Room' | 'System', message: string, data?: any) => {
@@ -492,6 +497,7 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
 
         // DataChannel events
         remotePeer.on('dataChannel', ({ type, event }: any) => {
+          console.log('DATACHANNEL EVENT', `${peer.id} <> ${remotePeer.id}`, type, event);
           const eventTypeMap: Record<string, 'success' | 'error' | 'warning' | 'info'> = {
             'open': 'success',
             'close': 'warning',
@@ -662,21 +668,33 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
     });
   };
   
-  const sendMessage = () => {
-    if (!messageInput.trim()) return;
+  const sendMessage = (peerId: string) => {
+    const message = channelInputs.get(peerId);
+    if (!message?.trim()) return;
     
-    // Determine which channels to send to
-    const channelsToSend = selectedChannelId === 'all' 
-      ? Array.from(dataChannels.entries())
-      : Array.from(dataChannels.entries()).filter(([id]) => id === selectedChannelId);
+    const channelInfo = dataChannels.get(peerId);
+    if (!channelInfo || channelInfo.channel.readyState !== 'open') return;
     
-    let sentCount = 0;
-    channelsToSend.forEach(([peerId, channelInfo]) => {
-      channelInfo.peer.sendMessage(messageInput);
-    });
-    
-    
-    setMessageInput('');
+    try {
+      channelInfo.peer.sendMessage(message);
+      addEvent('success', 'SEND', 'DataChannel', `Message sent to ${peerId} (${channelInfo.label || 'default'})`, { 
+        peerId, 
+        message,
+        label: channelInfo.label 
+      });
+      
+      // Clear the input for this channel
+      setChannelInputs(prev => {
+        const newMap = new Map(prev);
+        newMap.set(peerId, '');
+        return newMap;
+      });
+    } catch (error) {
+      addEvent('error', 'SEND_ERROR', 'DataChannel', `Failed to send message to ${peerId}`, { 
+        peerId, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
   };
 
   return (
@@ -760,49 +778,50 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
       
       <DataChannelZone>
         <DataChannelHeader>
-          <DataChannelTitle>Data Channel Status</DataChannelTitle>
-          <ConnectionStatusList>
-            {dataChannels.size === 0 ? (
-              <ConnectionStatus state="closed">No active channels</ConnectionStatus>
-            ) : (
-              Array.from(dataChannels.entries()).map(([peerId, info]) => (
-                <ConnectionStatus key={peerId} state={info.state}>
-                  {peerId.slice(0, 8)}... - {info.state}
-                </ConnectionStatus>
-              ))
-            )}
-          </ConnectionStatusList>
+          <DataChannelTitle>Data Channels</DataChannelTitle>
         </DataChannelHeader>
         
-        <MessageInputContainer>
-          <ChannelSelector
-            value={selectedChannelId}
-            onChange={(e) => setSelectedChannelId(e.target.value)}
-            disabled={dataChannels.size === 0}
-          >
-            <option value="all">All Channels</option>
-            {Array.from(dataChannels.entries()).map(([peerId, info]) => (
-              <option key={peerId} value={peerId}>
-                {info.label || 'default'} - {peerId.slice(0, 8)}...
-              </option>
-            ))}
-          </ChannelSelector>
-          <MessageInput
-            type="text"
-            placeholder="Type a message to send via data channel..."
-            value={messageInput}
-            onChange={(e) => setMessageInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-            disabled={dataChannels.size === 0}
-          />
-          <SendButton
-            onClick={sendMessage}
-            disabled={dataChannels.size === 0 || !messageInput.trim()}
-          >
-            <Send width={14} height={14} />
-            Send
-          </SendButton>
-        </MessageInputContainer>
+        <ChannelsList>
+          {dataChannels.size === 0 ? (
+            <NoChannelsMessage>No active data channels</NoChannelsMessage>
+          ) : ( 
+            Array.from(dataChannels.entries()).map(([peerId, info]) => (
+              <ChannelRow key={peerId}>
+                <ChannelInfo>
+                  <ChannelLabel>{info.label || 'default'}</ChannelLabel>
+                  <ChannelPeerId>{peerId}</ChannelPeerId>
+                </ChannelInfo>
+                
+                <ChannelStatus state={info.channel.readyState}>
+                  {info.channel.readyState}
+                </ChannelStatus>
+                
+                <ChannelInputContainer>
+                  <ChannelInput
+                    type="text"
+                    placeholder="Type a message..."
+                    value={channelInputs.get(peerId) || ''}
+                    onChange={(e) => {
+                      setChannelInputs(prev => {
+                        const newMap = new Map(prev);
+                        newMap.set(peerId, e.target.value);
+                        return newMap;
+                      });
+                    }}
+                    onKeyPress={(e) => e.key === 'Enter' && sendMessage(peerId)}
+                    disabled={info.channel.readyState !== 'open'}
+                  />
+                  <ChannelSendButton
+                    onClick={() => sendMessage(peerId)}
+                    disabled={info.channel.readyState !== 'open' || !(channelInputs.get(peerId)?.trim())}
+                  >
+                    <Send width={12} height={12} />
+                  </ChannelSendButton>
+                </ChannelInputContainer>
+              </ChannelRow>
+            ))
+          )}
+        </ChannelsList>
       </DataChannelZone>
     </Container>
   );

@@ -190,15 +190,15 @@ export class RoomConnection<MessageType = any> extends EventEmitter<RoomConnecti
   /**
    * Join the room
    */
-  join() {
+  async join() {
     this.startPeerSignalLoop();
-    return this.waitForJoin();
+    await this.waitForJoin();
   }
 
   /**
    * Leave the room
    */
-  leave() {
+  async leave() {
     this.stopPeerSignalLoop();
     this.remotePeers.forEach(remotePeer => {
       remotePeer.disconnect();
@@ -207,17 +207,20 @@ export class RoomConnection<MessageType = any> extends EventEmitter<RoomConnecti
     this.remotePeers.clear();
     this.stateByPeer.clear();
 
-    this.room.signalingAdapter.push({
-      id: uuidv7(),
-      roomId: this.room.id,
-      peerId: this.peer.id,
-      type: 'leave',
-    });
+    await Promise.all([
+      this.room.signalingAdapter.push({
+        id: uuidv7(),
+        roomId: this.room.id,
+        peerId: this.peer.id,
+        type: 'leave',
+      }),
 
-    this.room.emit('presence', {
-      peer: this.peer,
-      type: 'leave',
-    });
+      this.room.emit('presence', {
+        peer: this.peer,
+        type: 'leave',
+      }),
+    ])
+
   }
 
   sendMessage(message: MessageType) {

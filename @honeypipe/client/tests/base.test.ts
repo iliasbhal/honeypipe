@@ -33,11 +33,13 @@ describe('Basic Connection', () => {
 
 
   it('should detect people that joined a room', async () => {
-    alice.join(roomAlice);
-    bob.join(roomBob);
-    charlie.join(roomCharlie);
+    await Promise.all([
+      alice.join(roomAlice),
+      bob.join(roomBob),
+      charlie.join(roomCharlie),
+    ]);
 
-    await wait(1000);
+    await wait(500);
 
     const expected1 = [
       [{ type: 'join', peerId: alice.id }],
@@ -57,9 +59,9 @@ describe('Basic Connection', () => {
     roomCharlie.on('message', (event) => charlieSpy({ peerId: event.peer.id, message: event.message }));
 
     await Promise.all([
-      await alice.in(roomAlice).waitForOtherPeers(),
-      await bob.in(roomBob).waitForOtherPeers(),
-      await charlie.in(roomCharlie).waitForOtherPeers(),
+      alice.in(roomAlice).waitForOtherPeers(),
+      bob.in(roomBob).waitForOtherPeers(),
+      charlie.in(roomCharlie).waitForOtherPeers(),
     ]);
 
     alice.in(roomAlice).sendMessage('Hello everyone! (Alice)');
@@ -67,10 +69,7 @@ describe('Basic Connection', () => {
     charlie.in(roomCharlie).sendMessage('Hello everyone! (Charlie)');
 
 
-    await wait(1000);
-    const hasBeenCalledWith = (spy: any, peerId: string, message: string) => {
-      return spy.mock.calls.some(call => call[0].peerId === peerId && call[0].message === message);
-    };
+    await wait(500);
 
     expect(hasBeenCalledWith(bobSpy, bob.id, 'Hello everyone! (Bob)')).toBe(true);
     expect(hasBeenCalledWith(bobSpy, alice.id, 'Hello everyone! (Alice)')).toBe(true);
@@ -83,16 +82,32 @@ describe('Basic Connection', () => {
     expect(hasBeenCalledWith(charlieSpy, bob.id, 'Hello everyone! (Bob)')).toBe(true);
     expect(hasBeenCalledWith(charlieSpy, alice.id, 'Hello everyone! (Alice)')).toBe(true);
     expect(hasBeenCalledWith(charlieSpy, charlie.id, 'Hello everyone! (Charlie)')).toBe(true);
+  });
+
+  it('should allow newcomer to joing the room', async () => {
+    const roomDan = new Peer.Room<MessageContent>(roomId, signalingAdapter);
+    const dan = new Peer({ peerId: 'Dan' });
+    const danSpy = vi.fn();
+    roomDan.on('presence', (event) => danSpy({ type: event.type, peerId: event.peer.id }));
+
+    await dan.join(roomDan);
+    await wait(1000);
+
+    dan.in(roomDan).sendMessage('Hello everyone! (Dan)');
+
+    await wait(1000);
+
+    expect(hasBeenCalledWith(bobSpy, dan.id, 'Hello everyone! (Dan)')).toBe(true);
+    expect(hasBeenCalledWith(aliceSpy, dan.id, 'Hello everyone! (Dan)')).toBe(true);
+    expect(hasBeenCalledWith(charlieSpy, dan.id, 'Hello everyone! (Dan)')).toBe(true);
   })
 
   it('should detect people that left a room', async () => {
-    bob.leave(roomBob);
+    await bob.leave(roomBob);
+    await wait(1000);
 
-    await wait(2000);
-
-    alice.leave(roomAlice);
-
-    await wait(2000);
+    await alice.leave(roomAlice);
+    await wait(1000);
 
     const getLeaveEvents = (spy: any) => {
       return spy.mock.calls.filter(call => call[0].type === 'leave');
@@ -116,3 +131,7 @@ describe('Basic Connection', () => {
   })
 
 });
+
+const hasBeenCalledWith = (spy: any, peerId: string, message: string) => {
+  return spy.mock.calls.some(call => call[0].peerId === peerId && call[0].message === message);
+};

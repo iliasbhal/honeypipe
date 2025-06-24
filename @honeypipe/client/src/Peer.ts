@@ -48,16 +48,16 @@ export class Peer {
   /**
    * Join a room (internal use by PeerRoom)
    */
-  join(room: Room) {
+  async join(room: Room) {
     const peerRoom = this.in(room);
-    return peerRoom.join();
+    await peerRoom.join();
   }
 
   /**
    * Leave a room (internal use by PeerRoom)
    */
-  leave(room: Room) {
+  async leave(room: Room) {
     const peerRoom = this.in(room);
-    return peerRoom.leave();
+    await peerRoom.leave();
   }
 }

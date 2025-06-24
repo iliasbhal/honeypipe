@@ -311,7 +311,7 @@ export class RemotePeer<MessageType = any> extends EventEmitter<RemotePeerEvents
       dataChannel.addEventListener(eventType, (event) => {
         // @ts-expect-error
         this.emit('dataChannel', {
-          dataChannel: this.dataChannel!,
+          dataChannel,
           type: eventType,
           event,
         });

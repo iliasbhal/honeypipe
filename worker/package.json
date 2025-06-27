@@ -1,20 +1,38 @@
 {
+  "name": "worker",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "concurrently \"yarn backend:dev\" \"yarn frontend:dev\"",
+    "frontend:dev": "vite --config vite.config.frontend.ts",
+    "backend:dev": "vite --config vite.config.backend.ts",
+    "frontend:build": "vite build --config vite.config.frontend.ts",
+    "backend:build": "vite build --config vite.config.backend.ts",
     "preview": "wasmer run . --net",
     "deploy": "wasmer deploy"
   },
   "dependencies": {
     "hono": "^4.0.4",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "@honeypipe/client": "*",
+    "@number-flow/react": "^0.5.10",
+    "iconoir-react": "^7.11.0",
+    "motion": "^12.16.0",
+    "nuqs": "^2.4.3",
+    "@phosphor-icons/react": "^2.1.7",
+    "framer": "^2.4.1",
+    "framer-motion": "^11.5.6",
+    "react-tippy": "^1.4.0",
+    "styled-components": "^6.1.13"
   },
   "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
     "@hono/vite-cloudflare-pages": "^0.2.4",
     "@hono/vite-dev-server": "^0.5.0",
     "@vitejs/plugin-react": "^4.6.0",
+    "@vitejs/plugin-react-swc": "^3.10.2",
     "vite": "^5.0.12",
     "wrangler": "^3.25.0"
   }

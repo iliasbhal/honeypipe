@@ -1,6 +1,6 @@
 {
   "name": "@honeypipe/client",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "It's actually very very easy to do WebRTC",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

@@ -184,6 +184,7 @@ export class RemotePeer<MessageType = any> extends EventEmitter<RemotePeerEvents
     }
 
     this.dataChannel.send(serialized);
+    this.roomConnection.emitMessage(this.id, serialized);
   }
 
   /**

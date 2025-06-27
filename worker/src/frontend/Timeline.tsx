@@ -557,9 +557,9 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
 
   const [peer] = React.useState(() => new Peer({ peerId }));
   const [room] = React.useState(() => new Room(roomId, {
-    adapter: new HTTPSignalingAdapter({ 
-      baseUrl: '/api',
-    })
+    adapter: new FetchSignalAdapter({ 
+      baseUrl: 'http://localhost:8080',
+    }),
   }));
 
   const eventIdCounter = React.useRef(0);

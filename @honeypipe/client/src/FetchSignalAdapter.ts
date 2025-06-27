@@ -1,14 +1,14 @@
-import { SignalingEvent, SignalingAdapter, SignalPullRequest } from '@honeypipe/client';
+import { SignalingEvent, SignalingAdapter, SignalPullRequest } from './SignalingAdapter';
 
-export interface HTTPSignalingAdapterConfig {
+export interface FetchSignalAdapterConfig {
   baseUrl: string;
 }
 
-export class HTTPSignalingAdapter implements SignalingAdapter {
+export class FetchSignalAdapter implements SignalingAdapter {
   private baseUrl: string;
 
-  constructor(config: HTTPSignalingAdapterConfig) {
-    this.baseUrl = config.baseUrl.replace(/\/$/, ''); // Remove trailing slash
+  constructor(config: FetchSignalAdapterConfig) {
+    this.baseUrl = config.baseUrl?.replace(/\/$/, '');
   }
 
   /**

@@ -9,16 +9,32 @@ export class EventEmitter<EventMap extends Record<string, any>> {
   /**
    * Subscribe to an event
    */
-  on<K extends keyof EventMap>(event: K, handler: (event: EventMap[K]) => void) {
+  on<K extends keyof EventMap>(event: K, handler: (event: EventMap[K]) => void, options?: {
+    signal?: AbortSignal;
+  }) {
+    const { signal } = options || {};
+    if (signal?.aborted) {
+      return;
+    }
+
     if (!this.eventHandlers[event]) {
       this.eventHandlers[event] = new Set();
     }
+
     this.eventHandlers[event].add(handler);
 
+    const dispose = () => {
+      this.eventHandlers[event]?.delete(handler);
+    }
+
+    signal?.addEventListener('abort', () => {
+      dispose();
+    }, {
+      signal: signal,
+    })
+
     return {
-      dispose: () => {
-        this.eventHandlers[event]?.delete(handler);
-      }
+      dispose: dispose,
     };
   }
 

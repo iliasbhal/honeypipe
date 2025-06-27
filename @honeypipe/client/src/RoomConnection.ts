@@ -134,7 +134,7 @@ export class RoomConnection<MessageType = any> extends EventEmitter<RoomConnecti
     this.stateByPeer.set(peer, event.type);
     this.room.emit('presence', {
       peer: peer,
-      type: event.type
+      type: event.type as any,
     });
   }
 
@@ -289,11 +289,13 @@ export class RoomConnection<MessageType = any> extends EventEmitter<RoomConnecti
       existingPeers.forEach(waitForPeerReady);
 
       this.room.on('presence', async (event) => {
-        const isRemotePeerJoin = event.type === 'join' && event.peer instanceof RemotePeer;
-        if (!isRemotePeerJoin) return;
-
-        waitForPeerReady(event.peer)
-      }, { signal: abortController.signal });
+        const isJoin = event.type === 'join';
+        if (isJoin && event.peer instanceof RemotePeer) {
+          waitForPeerReady(event.peer)
+        }
+      }, {
+        signal: abortController.signal,
+      });
     });
   }
 }

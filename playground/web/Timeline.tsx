@@ -1,8 +1,8 @@
 import React from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowDown, Circle, CheckCircle, WarningCircle, Wifi, WifiOff, NavArrowDown, NavArrowRight, Send, Filter, X } from 'iconoir-react';
-import { Peer,  RemotePeer, Room } from '@honeypipe/client';
+import { Wifi, WifiOff, NavArrowRight, Send, Filter, User } from 'iconoir-react';
+import { Peer, RemotePeer, Room } from '@honeypipe/client';
 
 import { HTTPSignalingAdapter } from './HttpSignalingAdapter';
 
@@ -25,24 +25,6 @@ const Header = styled.div`
   border-bottom: 1px solid #1a1a1a;
   flex-shrink: 0;
   background: #0f0f0f;
-`;
-
-const Title = styled.h2`
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #f0f0f0;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  
-  &::before {
-    content: '◆';
-    color: #00ff88;
-    font-size: 10px;
-  }
 `;
 
 const ConnectionInfo = styled.div`
@@ -73,6 +55,7 @@ const FilterSection = styled.div`
   border-bottom: 1px solid #1a1a1a;
   flex-shrink: 0;
   font-size: 11px;
+  flex-wrap: wrap;
 `;
 
 const FilterLabel = styled.div`
@@ -80,6 +63,12 @@ const FilterLabel = styled.div`
   display: flex;
   align-items: center;
   gap: 4px;
+`;
+
+const FilterGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
 `;
 
 const FilterTag = styled.button<{ active: boolean; color: string }>`
@@ -98,6 +87,18 @@ const FilterTag = styled.button<{ active: boolean; color: string }>`
   &:hover {
     border-color: ${props => props.color + '60'};
     color: ${props => props.color};
+  }
+`;
+
+const PeerFilterTag = styled(FilterTag)`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  
+  svg {
+    width: 10px;
+    height: 10px;
   }
 `;
 
@@ -219,7 +220,8 @@ const SourceTag = styled.div<{ source: string }>`
     switch(props.source) {
       case 'DataChannel': return '#00ff8815';
       case 'PeerConnection': return '#00aaff15';
-      case 'Room': return '#ffaa0015';
+      case 'Signal': return '#ffaa0015';
+      case 'Room': return '#60606015';
       case 'System': return '#60606015';
       default: return '#60606015';
     }
@@ -228,7 +230,8 @@ const SourceTag = styled.div<{ source: string }>`
     switch(props.source) {
       case 'DataChannel': return '#00ff88';
       case 'PeerConnection': return '#00aaff';
-      case 'Room': return '#ffaa00';
+      case 'Signal': return '#ffaa00';
+      case 'Room': return '#808080';
       case 'System': return '#808080';
       default: return '#808080';
     }
@@ -237,11 +240,30 @@ const SourceTag = styled.div<{ source: string }>`
     switch(props.source) {
       case 'DataChannel': return '#00ff8830';
       case 'PeerConnection': return '#00aaff30';
-      case 'Room': return '#ffaa0030';
+      case 'Signal': return '#ffaa0030';
+      case 'Room': return '#60606030';
       case 'System': return '#60606030';
       default: return '#60606030';
     }
   }};
+`;
+
+const PeerTag = styled.div`
+  font-size: 9px;
+  font-weight: 500;
+  padding: 2px 5px;
+  border-radius: 2px;
+  background: #1a1a1a;
+  color: #a0a0a0;
+  border: 1px solid #2a2a2a;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  
+  svg {
+    width: 8px;
+    height: 8px;
+  }
 `;
 
 const ExpandIcon = styled.div<{ expanded: boolean }>`
@@ -317,21 +339,21 @@ const StatusIndicator = styled.div<{ connected: boolean }>`
   letter-spacing: 0.03em;
 `;
 
-const DataChannelZone = styled.div`
+const PeerConnectionsZone = styled.div`
   background: #0f0f0f;
   border-top: 1px solid #1a1a1a;
   padding: 10px 16px;
   flex-shrink: 0;
 `;
 
-const DataChannelHeader = styled.div`
+const PeerConnectionsHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
 `;
 
-const DataChannelTitle = styled.h3`
+const PeerConnectionsTitle = styled.h3`
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -349,13 +371,13 @@ const DataChannelTitle = styled.h3`
   }
 `;
 
-const ChannelsList = styled.div`
+const PeersList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 6px;
 `;
 
-const ChannelItem = styled.div`
+const PeerItem = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
@@ -365,14 +387,14 @@ const ChannelItem = styled.div`
   padding: 6px 8px;
 `;
 
-const ChannelInfo = styled.div`
+const PeerInfo = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
 `;
 
-const ChannelName = styled.div`
+const PeerName = styled.div`
   font-size: 11px;
   font-weight: 500;
   color: #e0e0e0;
@@ -381,7 +403,7 @@ const ChannelName = styled.div`
   gap: 6px;
 `;
 
-const ChannelState = styled.span<{ state: string }>`
+const PeerState = styled.span<{ state: string }>`
   font-size: 9px;
   font-weight: 600;
   padding: 1px 4px;
@@ -389,35 +411,34 @@ const ChannelState = styled.span<{ state: string }>`
   text-transform: uppercase;
   background: ${props => {
     switch(props.state) {
-      case 'open': return '#00ff8820';
+      case 'connected': return '#00ff8820';
       case 'connecting': return '#ffaa0020';
-      case 'closing': case 'closed': return '#ff555520';
+      case 'failed': case 'closed': return '#ff555520';
       default: return '#60606020';
     }
   }};
   color: ${props => {
     switch(props.state) {
-      case 'open': return '#00ff88';
+      case 'connected': return '#00ff88';
       case 'connecting': return '#ffaa00';
-      case 'closing': case 'closed': return '#ff5555';
+      case 'failed': case 'closed': return '#ff5555';
       default: return '#808080';
     }
   }};
 `;
 
-const ChannelPeer = styled.div`
+const PeerStats = styled.div`
   font-size: 10px;
   color: #606060;
 `;
 
-const MessageForm = styled.form`
+const ChannelControls = styled.div`
   display: flex;
   gap: 4px;
-  margin-top: 4px;
+  align-items: center;
 `;
 
 const MessageInput = styled.input`
-  flex: 1;
   background: #080808;
   border: 1px solid #2a2a2a;
   border-radius: 3px;
@@ -425,6 +446,7 @@ const MessageInput = styled.input`
   font-size: 10px;
   color: #f0f0f0;
   font-family: inherit;
+  width: 150px;
   
   &::placeholder {
     color: #404040;
@@ -464,7 +486,7 @@ const SendButton = styled.button`
   }
 `;
 
-const NoChannelsMessage = styled.div`
+const NoPeersMessage = styled.div`
   text-align: center;
   padding: 16px;
   color: #505050;
@@ -493,10 +515,21 @@ interface TimelineEvent {
   id: string;
   type: 'success' | 'error' | 'warning' | 'info';
   eventType: string;
-  source: 'DataChannel' | 'PeerConnection' | 'Room' | 'System';
+  source: 'DataChannel' | 'PeerConnection' | 'Signal' | 'Room' | 'System';
   message: string;
   timestamp: Date;
+  peerId?: string;
   data?: any;
+}
+
+interface PeerConnectionData {
+  peer: RemotePeer;
+  connectionState: string;
+  dataChannel?: {
+    channel: any;
+    state: string;
+    label: string;
+  };
 }
 
 interface TimelineProps {
@@ -505,9 +538,10 @@ interface TimelineProps {
 }
 
 const sourceColors = {
-  'DataChannel': '#00ff88',
-  'PeerConnection': '#00aaff',
-  'Room': '#ffaa00',
+  'Messages': '#00ff88',
+  'Connection': '#00aaff',
+  'Signal': '#ffaa00',
+  'Room': '#808080',
   'System': '#808080'
 };
 
@@ -515,8 +549,11 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
   const [events, setEvents] = React.useState<TimelineEvent[]>([]);
   const [isConnected, setIsConnected] = React.useState(false);
   const [expandedEvents, setExpandedEvents] = React.useState<Set<string>>(new Set());
-  const [activeFilters, setActiveFilters] = React.useState<Set<string>>(new Set(['DataChannel', 'PeerConnection', 'Room', 'System']));
+  const [activeSourceFilters, setActiveSourceFilters] = React.useState<Set<string>>(new Set(['DataChannel', 'PeerConnection', 'Signal', 'Room', 'System']));
+  const [activePeerFilters, setActivePeerFilters] = React.useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [peerConnections, setPeerConnections] = React.useState<Map<string, PeerConnectionData>>(new Map());
+  const [channelInputs, setChannelInputs] = React.useState<Map<string, string>>(new Map());
 
   const [peer] = React.useState(() => new Peer({ peerId }));
   const [room] = React.useState(() => new Room(roomId, {
@@ -526,11 +563,9 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
   }));
 
   const eventIdCounter = React.useRef(0);
-  const [channelInputs, setChannelInputs] = React.useState<Map<string, string>>(new Map());
-  const [dataChannels, setDataChannels] = React.useState<Map<string, { channel: RTCDataChannel, state: string, peer: RemotePeer, label?: string }>>(new Map());
 
   // Helper function to add events to timeline
-  const addEvent = (type: 'success' | 'error' | 'warning' | 'info', eventType: string, source: 'DataChannel' | 'PeerConnection' | 'Room' | 'System', message: string, data?: any) => {
+  const addEvent = (type: 'success' | 'error' | 'warning' | 'info', eventType: string, source: 'DataChannel' | 'PeerConnection' | 'Signal' | 'Room' | 'System', message: string, data?: any & { peerId?: string }) => {
     const event: TimelineEvent = {
       id: String(++eventIdCounter.current),
       type,
@@ -538,6 +573,7 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
       source,
       message,
       timestamp: new Date(),
+      peerId: data?.peerId,
       data
     };
     setEvents(prev => [...prev, event]);
@@ -546,19 +582,31 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
   // Filter events based on active filters and search query
   const filteredEvents = React.useMemo(() => {
     return events.filter(event => {
-      if (!activeFilters.has(event.source)) return false;
+      // Source filter
+      if (!activeSourceFilters.has(event.source)) return false;
+      
+      // Peer filter - if any peer filters are active, only show events from those peers
+      if (activePeerFilters.size > 0) {
+        // Always show Room and System events when peer filters are active
+        if (event.source !== 'Room' && event.source !== 'System') {
+          if (!event.peerId || !activePeerFilters.has(event.peerId)) return false;
+        }
+      }
+      
+      // Search query
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         return (
           event.message.toLowerCase().includes(query) ||
           event.eventType.toLowerCase().includes(query) ||
           event.source.toLowerCase().includes(query) ||
+          (event.peerId && event.peerId.toLowerCase().includes(query)) ||
           (event.data && JSON.stringify(event.data).toLowerCase().includes(query))
         );
       }
       return true;
     });
-  }, [events, activeFilters, searchQuery]);
+  }, [events, activeSourceFilters, activePeerFilters, searchQuery]);
 
   // Event statistics
   const eventStats = React.useMemo(() => {
@@ -573,8 +621,8 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
     return stats;
   }, [events]);
 
-  const toggleFilter = (source: string) => {
-    setActiveFilters(prev => {
+  const toggleSourceFilter = (source: string) => {
+    setActiveSourceFilters(prev => {
       const next = new Set(prev);
       if (next.has(source)) {
         next.delete(source);
@@ -585,14 +633,26 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
     });
   };
 
+  const togglePeerFilter = (peerId: string) => {
+    setActivePeerFilters(prev => {
+      const next = new Set(prev);
+      if (next.has(peerId)) {
+        next.delete(peerId);
+      } else {
+        next.add(peerId);
+      }
+      return next;
+    });
+  };
+
   React.useEffect(() => {
     const otherPeers = new Set<RemotePeer>();
     
-    addEvent('info', 'init', 'System', 'Initializing peer connection', { peerId, roomId });
+    addEvent('info', 'init', 'System', 'Initializing peer connection', { peerId: peer.id, roomId });
     
     peer.join(room);
 
-    room.on('presence', (event) => {
+    room.on('presence', (event: any) => {
       const remotePeer = event.peer;
 
       if (remotePeer instanceof RemotePeer) {
@@ -600,17 +660,34 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
         otherPeers.add(remotePeer);
         if (alreadySeen) return;
 
-        remotePeer.on('receivedSignal', (event: any) => {
-          addEvent('info', 'signal (received)', 'Room', `Signal received from ${event.peerId}`, { peerId: event.peerId, type: event.type, event });
+        // Initialize peer connection data
+        setPeerConnections(prev => new Map(prev).set(remotePeer.id, {
+          peer: remotePeer,
+          connectionState: 'new'
+        }));
+
+        addEvent('info', 'presence', 'Room', `Peer ${remotePeer.id} ${event.type}ed`, { 
+          peerId: remotePeer.id, 
+          type: event.type 
         });
 
-        remotePeer.on('sentSignal', (event: any) => {
-          addEvent('info', 'signal (sent)', 'Room', `Signal sent to ${event.peerId}`, { peerId: event.peerId, type: event.type, event });
+        // Signal events
+        remotePeer.on('receivedSignal', (signalEvent: any) => {
+          addEvent('info', 'signal-received', 'Signal', `Signal received: ${signalEvent.type}`, { 
+            peerId: remotePeer.id,
+            signal: signalEvent 
+          });
+        });
+
+        remotePeer.on('sentSignal', (signalEvent: any) => {
+          addEvent('info', 'signal-sent', 'Signal', `Signal sent: ${signalEvent.type}`, { 
+            peerId: remotePeer.id,
+            signal: signalEvent 
+          });
         });
 
         // DataChannel events
-        remotePeer.on('dataChannel', ({ type, event }: any) => {
-          console.log('DATACHANNEL EVENT', `${peer.id} <> ${remotePeer.id}`, type, event);
+        remotePeer.on('dataChannel', ({ type, event: dcEvent, dataChannel }: any) => {
           const eventTypeMap: Record<string, 'success' | 'error' | 'warning' | 'info'> = {
             'open': 'success',
             'close': 'warning',
@@ -618,91 +695,122 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
             'message': 'info'
           };
           
-          const eventType = eventTypeMap[type] || 'info';
-          const message = type === 'error' 
-            ? `Data channel error with ${remotePeer.id}: ${event.error?.message || 'Unknown error'}`
-            : type === 'message'
-            ? `Message received from ${remotePeer.id}`
-            : `Data channel ${type} with ${remotePeer.id}`;
-
-          console.log('DATACHANNEL EVENT', event);
-          
-          // Track data channel state
-          if (type === 'open') {
-            const channel = event.target || event;
-            const label = channel.label || 'default';
-            setDataChannels(prev => new Map(prev).set(remotePeer.id, { 
-              channel, 
-              state: 'open', 
-              peer: remotePeer,
-              label 
-            }));
-          } else if (type === 'close') {
-            setDataChannels(prev => {
-              const newMap = new Map(prev);
-              newMap.delete(remotePeer.id);
-              return newMap;
-            });
-          }
-            
-          addEvent(eventType, type.toUpperCase(), 'DataChannel', message, { 
-            peerId: remotePeer.id, 
-            type, 
-            event,
-            ...(type === 'message' && { data: { data: event.data, label: event.label } })
-          });
-        });
-
-        // PeerConnection events
-        remotePeer.on('peerConnection', ({ type, event }: any) => {
-          let eventLevel: 'success' | 'error' | 'warning' | 'info' = 'info';
-          let message = `${type} with ${remotePeer.id}`;
-          let additionalData: any = { peerId: remotePeer.id, type, event };
+          const eventLevel = eventTypeMap[type] || 'info';
+          let message = '';
           
           switch (type) {
-            case 'connectionstatechange':
-              const state = event.target?.connectionState || 'unknown';
-              eventLevel = state === 'connected' ? 'success' : state === 'failed' ? 'error' : 'info';
-              message = `Connection state with ${remotePeer.id}: ${state}`;
-              additionalData.state = state;
-              
-              // Update data channel connection state
-              setDataChannels(prev => {
+            case 'open':
+              message = 'Data channel opened';
+              setPeerConnections(prev => {
                 const newMap = new Map(prev);
-                const channel = newMap.get(remotePeer.id);
-                if (channel) {
-                  newMap.set(remotePeer.id, { ...channel, state });
+                const peerData = newMap.get(remotePeer.id);
+                if (peerData) {
+                  newMap.set(remotePeer.id, {
+                    ...peerData,
+                    dataChannel: {
+                      channel: dataChannel || dcEvent.target || dcEvent,
+                      state: 'open',
+                      label: dataChannel?.label || 'default'
+                    }
+                  });
                 }
                 return newMap;
               });
               break;
+            case 'close':
+              message = 'Data channel closed';
+              setPeerConnections(prev => {
+                const newMap = new Map(prev);
+                const peerData = newMap.get(remotePeer.id);
+                if (peerData && peerData.dataChannel) {
+                  newMap.set(remotePeer.id, {
+                    ...peerData,
+                    dataChannel: {
+                      ...peerData.dataChannel,
+                      state: 'closed'
+                    }
+                  });
+                }
+                return newMap;
+              });
+              break;
+            case 'error':
+              message = `Data channel error: ${dcEvent.error?.message || 'Unknown error'}`;
+              break;
+            case 'message':
+              message = `Message received: ${dcEvent.data}`;
+              break;
+            default:
+              message = `Data channel ${type}`;
+          }
+          
+          addEvent(eventLevel, type, 'DataChannel', message, { 
+            peerId: remotePeer.id,
+            type,
+            ...(type === 'message' && { data: dcEvent.data })
+          });
+        });
+
+        // PeerConnection events
+        remotePeer.on('peerConnection', ({ type, event: pcEvent }: any) => {
+          let eventLevel: 'success' | 'error' | 'warning' | 'info' = 'info';
+          let message = '';
+          let additionalData: any = { peerId: remotePeer.id, type };
+          
+          switch (type) {
+            case 'connectionstatechange':
+              const state = pcEvent.target?.connectionState || 'unknown';
+              eventLevel = state === 'connected' ? 'success' : state === 'failed' ? 'error' : 'info';
+              message = `Connection state: ${state}`;
+              additionalData.state = state;
+              
+              setPeerConnections(prev => {
+                const newMap = new Map(prev);
+                const peerData = newMap.get(remotePeer.id);
+                if (peerData) {
+                  newMap.set(remotePeer.id, {
+                    ...peerData,
+                    connectionState: state
+                  });
+                }
+                return newMap;
+              });
+              
+              if (state === 'connected') {
+                setIsConnected(true);
+              } else if (state === 'failed' || state === 'closed') {
+                setIsConnected(false);
+              }
+              break;
             case 'iceconnectionstatechange':
-              const iceState = event.target?.iceConnectionState || 'unknown';
+              const iceState = pcEvent.target?.iceConnectionState || 'unknown';
               eventLevel = iceState === 'connected' || iceState === 'completed' ? 'success' : iceState === 'failed' ? 'error' : 'info';
-              message = `ICE connection state with ${remotePeer.id}: ${iceState}`;
+              message = `ICE connection state: ${iceState}`;
               additionalData.iceState = iceState;
               break;
             case 'icegatheringstatechange':
-              const gatheringState = event.target?.iceGatheringState || 'unknown';
-              message = `ICE gathering state with ${remotePeer.id}: ${gatheringState}`;
+              const gatheringState = pcEvent.target?.iceGatheringState || 'unknown';
+              message = `ICE gathering state: ${gatheringState}`;
               additionalData.gatheringState = gatheringState;
               break;
             case 'icecandidate':
-              if (event.candidate) {
-                message = `ICE candidate found for ${remotePeer.id}`;
-                additionalData.candidate = event.candidate;
+              if (pcEvent.candidate) {
+                message = 'ICE candidate found';
+                additionalData.candidate = pcEvent.candidate;
               } else {
-                message = `ICE gathering complete for ${remotePeer.id}`;
+                message = 'ICE gathering complete';
               }
               break;
             case 'signalingstatechange':
-              const signalingState = event.target?.signalingState || 'unknown';
-              message = `Signaling state with ${remotePeer.id}: ${signalingState}`;
+              const signalingState = pcEvent.target?.signalingState || 'unknown';
+              message = `Signaling state: ${signalingState}`;
               additionalData.signalingState = signalingState;
               break;
             case 'negotiationneeded':
-              message = `Negotiation needed with ${remotePeer.id}`;
+              message = 'Negotiation needed';
               break;
+            default:
+              message = type;
           }
           
           addEvent(eventLevel, type, 'PeerConnection', message, additionalData);
@@ -714,27 +822,15 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
         }
       }
     });
-    
-    // Room message events
-    room.on('message', (event: any) => {
-      addEvent('info', 'message', 'Room', `Message from ${event.peer.id}`, { 
-        peerId: event.peer.id,
-        message: event.message,
-        timestamp: event.timestamp,
-        event 
-      });
-    });
-    
-    // Room error events
-    room.on('error', (event: any) => {
-      addEvent('error', 'error', 'Room', `Room error: ${event.message || event.error?.message || 'Unknown error'}`, { 
-        error: event.error || event,
-        event 
-      });
+
+    room.on('error', (error: Error) => {
+      addEvent('error', 'room', 'Room', `Room error: ${error.message}`, { error });
     });
 
+
     return () => {
-      // peer.disconnect();
+      // Clean up
+      peer.leave(room);
     };
   }, []);
 
@@ -750,63 +846,120 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
     });
   };
 
-  const handleSendMessage = (channelKey: string) => {
-    const channelData = dataChannels.get(channelKey);
-    const message = channelInputs.get(channelKey) || '';
+  const handleSendMessage = (peerId: string, e: React.FormEvent) => {
+    e.preventDefault();
+    const peerData = peerConnections.get(peerId);
+    const message = channelInputs.get(peerId) || '';
     
-    if (channelData && message.trim()) {
+    if (peerData?.dataChannel && message.trim()) {
       try {
-        channelData.channel.send(message);
+        peerData.dataChannel.channel.send(message);
         addEvent('success', 'message', 'DataChannel', `Sent: ${message}`, { 
-          channel: channelData.label,
+          peerId,
+          channel: peerData.dataChannel.label,
           sent: true,
           data: message 
         });
-        setChannelInputs(prev => new Map(prev).set(channelKey, ''));
-      } catch (error) {
-        addEvent('error', 'message', 'DataChannel', `Failed to send message: ${error}`, { error });
+        setChannelInputs(prev => new Map(prev).set(peerId, ''));
+      } catch (error: any) {
+        addEvent('error', 'message', 'DataChannel', `Failed to send message: ${error.message}`, { peerId, error });
       }
     }
   };
 
   return (
     <Container>
-      <Header>
-        <ConnectionInfo>
-          <InfoItem>Room: <span>{roomId}</span></InfoItem>
-          <InfoItem>Peer: <span>{peer.id}</span></InfoItem>
-          <StatusIndicator connected={isConnected}>
-            {isConnected ? <Wifi width={12} height={12} /> : <WifiOff width={12} height={12} />}
-            {isConnected ? 'Connected' : 'Disconnected'}
-          </StatusIndicator>
-        </ConnectionInfo>
-      </Header>
 
+<PeerConnectionsZone>
+        <PeerConnectionsHeader>
+          <PeerConnectionsTitle>Peer Connections</PeerConnectionsTitle>
+        </PeerConnectionsHeader>
+        {peerConnections.size > 0 ? (
+          <PeersList>
+            {Array.from(peerConnections.entries()).map(([peerId, peerData]) => (
+              <PeerItem key={peerId}>
+                <PeerInfo>
+                  <PeerName>
+                    <User width={12} height={12} />
+                    {peerId}
+                    <PeerState state={peerData.connectionState}>
+                      {peerData.connectionState}
+                    </PeerState>
+                  </PeerName>
+                  <PeerStats>
+                    {peerData.dataChannel ? `Channel: ${peerData.dataChannel.label} (${peerData.dataChannel.state})` : 'No data channel'}
+                  </PeerStats>
+                </PeerInfo>
+                {peerData.dataChannel && peerData.dataChannel.state === 'open' && (
+                  <ChannelControls>
+                    <MessageInput
+                      type="text"
+                      placeholder="Type a message..."
+                      value={channelInputs.get(peerId) || ''}
+                      onChange={(e) => setChannelInputs(prev => new Map(prev).set(peerId, e.target.value))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSendMessage(peerId, e);
+                        }
+                      }}
+                    />
+                    <SendButton
+                      onClick={(e) => handleSendMessage(peerId, e)}
+                      disabled={!(channelInputs.get(peerId) || '').trim()}
+                    >
+                      <Send width={12} height={12} />
+                    </SendButton>
+                  </ChannelControls>
+                )}
+              </PeerItem>
+            ))}
+          </PeersList>
+        ) : (
+          <NoPeersMessage>No peer connections established yet</NoPeersMessage>
+        )}
+      </PeerConnectionsZone>
       <FilterSection>
-        <FilterLabel>
-          <Filter width={12} height={12} />
-          Filters:
-        </FilterLabel>
-        {Object.entries(sourceColors).map(([source, color]) => (
-          <FilterTag
-            key={source}
-            active={activeFilters.has(source)}
-            color={color}
-            onClick={() => toggleFilter(source)}
-          >
-            {source} ({eventStats.bySource[source] || 0})
-          </FilterTag>
-        ))}
+        <FilterGroup>
+          <FilterLabel>
+            <Filter width={12} height={12} />
+            Sources:
+          </FilterLabel>
+          {Object.entries(sourceColors).map(([source, color]) => (
+            <FilterTag
+              key={source}
+              active={activeSourceFilters.has(source)}
+              color={color}
+              onClick={() => toggleSourceFilter(source)}
+            >
+              {source}
+            </FilterTag>
+          ))}
+        </FilterGroup>
+        
+        {peerConnections.size > 0 && (
+          <FilterGroup>
+            <FilterLabel>
+              <User width={12} height={12} />
+              Peers:
+            </FilterLabel>
+            {Array.from(peerConnections.entries()).map(([peerId, peerData]) => (
+              <PeerFilterTag
+                key={peerId}
+                active={activePeerFilters.has(peerId)}
+                color="#00aaff"
+                onClick={() => togglePeerFilter(peerId)}
+              >
+                <User />
+                {peerId.slice(0, 8)}...
+              </PeerFilterTag>
+            ))}
+          </FilterGroup>
+        )}
+        
         <EventStats>
           <StatItem>Total: <strong>{eventStats.total}</strong></StatItem>
           <StatItem>Errors: <strong>{eventStats.errors}</strong></StatItem>
         </EventStats>
-        <SearchInput
-          type="text"
-          placeholder="Search events..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
       </FilterSection>
 
       <TimelineContainer>
@@ -826,6 +979,12 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
                   <EventHeaderLeft>
                     <SourceTag source={event.source}>{event.source}</SourceTag>
                     <EventType>{event.eventType}</EventType>
+                    {event.peerId && (
+                      <PeerTag>
+                        <User />
+                        {event.peerId.slice(0, 8)}...
+                      </PeerTag>
+                    )}
                     <ExpandIcon expanded={expandedEvents.has(event.id)}>
                       <NavArrowRight width={12} height={12} />
                     </ExpandIcon>
@@ -850,47 +1009,6 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
           ))}
         </AnimatePresence>
       </TimelineContainer>
-
-      <DataChannelZone>
-        <DataChannelHeader>
-          <DataChannelTitle>Data Channels</DataChannelTitle>
-        </DataChannelHeader>
-        {dataChannels.size > 0 ? (
-          <ChannelsList>
-            {Array.from(dataChannels.entries()).map(([key, { channel, state, peer, label }]) => (
-              <ChannelItem key={key}>
-                <ChannelInfo>
-                  <ChannelName>
-                    {label || 'unnamed'} 
-                    <ChannelState state={state}>
-                      {state}
-                      {channel.readyState}
-                    </ChannelState>
-                  </ChannelName>
-                  <ChannelPeer>with {peer.id}</ChannelPeer>
-                </ChannelInfo>
-                  <MessageInput
-                    type="text"
-                    placeholder="Type a message..."
-                    value={channelInputs.get(key) || ''}
-                    onChange={(e) => setChannelInputs(prev => new Map(prev).set(key, e.target.value))}
-                  />
-                  <SendButton
-                    disabled={channel.readyState !== 'open'}
-                    onClick={() => {
-                      console.log('channel', channel);
-                      handleSendMessage(key)
-                    }}
-                  >
-                    <Send width={12} height={12} />
-                  </SendButton>
-              </ChannelItem>
-            ))}
-          </ChannelsList>
-        ) : (
-          <NoChannelsMessage>No data channels established yet</NoChannelsMessage>
-        )}
-      </DataChannelZone>
     </Container>
   );
 };

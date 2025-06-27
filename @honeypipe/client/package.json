@@ -1,6 +1,6 @@
 {
   "name": "@honeypipe/client",
-  "version": "0.0.3",
+  "version": "0.0.2",
   "description": "It's actually very very easy to do WebRTC",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -18,14 +18,15 @@
   "author": "ilias.bhal@gmail.com",
   "license": "MIT",
   "type": "module",
+  "private": false,
   "scripts": {
     "build": "tsup",
-    "test": "vitest",
-    "prepublishOnly": "npm run build"
+    "test": "vitest"
   },
   "dependencies": {
     "superjson": "^2.2.2",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@types/ioredis-mock": "^8.2.6",

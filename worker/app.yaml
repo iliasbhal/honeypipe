@@ -1,0 +1,6 @@
+kind: wasmer.io/App.v0
+name: honeypipe
+owner: iliasbhal
+package: .
+debug: false
+app_id: da_KAmI3tXU569P

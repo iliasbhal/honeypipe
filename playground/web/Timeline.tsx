@@ -1,12 +1,14 @@
 import React from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowDown, Circle, CheckCircle, WarningCircle, Wifi, WifiOff, NavArrowDown, NavArrowRight, Send } from 'iconoir-react';
-import { Peer, BroadcastChannelAdapter, RemotePeer } from '@honeypipe/client';
+import { ArrowDown, Circle, CheckCircle, WarningCircle, Wifi, WifiOff, NavArrowDown, NavArrowRight, Send, Filter, X } from 'iconoir-react';
+import { Peer,  RemotePeer, Room } from '@honeypipe/client';
+
+import { HTTPSignalingAdapter } from './HttpSignalingAdapter';
 
 const Container = styled.div`
   font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-  background: #1a1a1a;
+  background: #0a0a0a;
   color: #f0f0f0;
   height: 100vh;
   width: 100vw;
@@ -19,14 +21,14 @@ const Header = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px 12px 20px;
-  border-bottom: 1px solid #2a2a2a;
+  padding: 10px 16px;
+  border-bottom: 1px solid #1a1a1a;
   flex-shrink: 0;
-  background: #1a1a1a;
+  background: #0f0f0f;
 `;
 
 const Title = styled.h2`
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -34,85 +36,161 @@ const Title = styled.h2`
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   
   &::before {
     content: '◆';
     color: #00ff88;
+    font-size: 10px;
   }
 `;
 
 const ConnectionInfo = styled.div`
   display: flex;
   align-items: center;
-  gap: 20px;
-  font-size: 12px;
-  color: #808080;
+  gap: 16px;
+  font-size: 11px;
+  color: #606060;
 `;
 
 const InfoItem = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   
   span {
-    color: #e0e0e0;
+    color: #d0d0d0;
     font-weight: 500;
+  }
+`;
+
+const FilterSection = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #0f0f0f;
+  border-bottom: 1px solid #1a1a1a;
+  flex-shrink: 0;
+  font-size: 11px;
+`;
+
+const FilterLabel = styled.div`
+  color: #808080;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`;
+
+const FilterTag = styled.button<{ active: boolean; color: string }>`
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid ${props => props.active ? props.color + '60' : '#2a2a2a'};
+  background: ${props => props.active ? props.color + '20' : 'transparent'};
+  color: ${props => props.active ? props.color : '#606060'};
+  cursor: pointer;
+  transition: all 0.15s ease;
+  
+  &:hover {
+    border-color: ${props => props.color + '60'};
+    color: ${props => props.color};
+  }
+`;
+
+const SearchInput = styled.input`
+  background: #0a0a0a;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #f0f0f0;
+  margin-left: auto;
+  width: 200px;
+  
+  &::placeholder {
+    color: #505050;
+  }
+  
+  &:focus {
+    outline: none;
+    border-color: #3a3a3a;
   }
 `;
 
 const TimelineContainer = styled.div`
   position: relative;
-  padding: 20px;
+  padding: 12px;
   flex: 1;
-
   overflow-y: auto;
   
   &::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
   }
   
   &::-webkit-scrollbar-track {
-    background: #0f0f0f;
-    border-radius: 4px;
+    background: #0a0a0a;
   }
   
   &::-webkit-scrollbar-thumb {
-    background: #3a3a3a;
-    border-radius: 4px;
+    background: #2a2a2a;
+    border-radius: 3px;
     
     &:hover {
-      background: #4a4a4a;
+      background: #3a3a3a;
     }
   }
 `;
 
 const TimelineLine = styled.div`
   position: absolute;
-  left: 31px;
-  top: 20px;
-  bottom: 20px;
-  width: 2px;
+  left: 20px;
+  top: 12px;
+  bottom: 12px;
+  width: 1px;
   background: linear-gradient(to bottom, #00ff88, #00ff8850, transparent);
 `;
 
 const EventItem = styled(motion.div)<{ type: string }>`
   position: relative;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
+`;
+
+const EventDot = styled.div<{ type: string }>`
+  position: absolute;
+  left: -24px;
+  top: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: ${props => {
+    switch(props.type) {
+      case 'success': return '#00ff88';
+      case 'error': return '#ff5555';
+      case 'warning': return '#ffaa00';
+      case 'info': return '#00aaff';
+      default: return '#606060';
+    }
+  }};
+  border: 2px solid #0a0a0a;
+  z-index: 1;
 `;
 
 const EventContent = styled.div`
   background: #0f0f0f;
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
-  padding: 12px 16px;
-  margin-left: 8px;
+  border: 1px solid #1a1a1a;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-left: 4px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   
   &:hover {
-    background: #121212;
-    border-color: #3a3a3a;
+    background: #111111;
+    border-color: #2a2a2a;
   }
 `;
 
@@ -120,30 +198,30 @@ const EventHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 8px;
+  gap: 8px;
 `;
 
 const EventHeaderLeft = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
 `;
 
 const SourceTag = styled.div<{ source: string }>`
   font-size: 9px;
   font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 3px;
+  padding: 2px 5px;
+  border-radius: 2px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
   background: ${props => {
     switch(props.source) {
-      case 'DataChannel': return '#00ff8820';
-      case 'PeerConnection': return '#00aaff20';
-      case 'Room': return '#ffaa0020';
-      case 'System': return '#80808020';
-      default: return '#80808020';
+      case 'DataChannel': return '#00ff8815';
+      case 'PeerConnection': return '#00aaff15';
+      case 'Room': return '#ffaa0015';
+      case 'System': return '#60606015';
+      default: return '#60606015';
     }
   }};
   color: ${props => {
@@ -157,112 +235,92 @@ const SourceTag = styled.div<{ source: string }>`
   }};
   border: 1px solid ${props => {
     switch(props.source) {
-      case 'DataChannel': return '#00ff8840';
-      case 'PeerConnection': return '#00aaff40';
-      case 'Room': return '#ffaa0040';
-      case 'System': return '#80808040';
-      default: return '#80808040';
+      case 'DataChannel': return '#00ff8830';
+      case 'PeerConnection': return '#00aaff30';
+      case 'Room': return '#ffaa0030';
+      case 'System': return '#60606030';
+      default: return '#60606030';
     }
   }};
 `;
 
-const ExpandIcon = styled.div`
+const ExpandIcon = styled.div<{ expanded: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: auto;
-  color: #606060;
-  transition: transform 0.2s ease;
+  color: #505050;
+  transition: transform 0.15s ease;
+  transform: ${props => props.expanded ? 'rotate(90deg)' : 'rotate(0)'};
 `;
 
-const EventType = styled.div<{ type: string }>`
-  font-size: 13px;
+const EventType = styled.div`
+  font-size: 11px;
   font-weight: 600;
-  color: ${props => {
-    switch(props.type) {
-      case 'success': return '#00ff88';
-      case 'error': return '#ff5555';
-      case 'warning': return '#ffaa00';
-      case 'info': return '#00aaff';
-      default: return '#808080';
-    }
-  }};
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: #d0d0d0;
+  flex: 1;
 `;
 
 const EventTime = styled.div`
-  font-size: 11px;
-  color: #606060;
+  font-size: 10px;
+  color: #505050;
+  margin-left: auto;
 `;
 
 const EventMessage = styled.div`
-  font-size: 13px;
-  color: #e0e0e0;
-  line-height: 1.5;
+  font-size: 11px;
+  color: #b0b0b0;
+  line-height: 1.4;
+  margin-top: 4px;
 `;
 
 const EventData = styled.pre<{ isExpanded: boolean }>`
-  font-size: 11px;
-  color: #808080;
-  margin-top: 8px;
-  padding: 8px;
-  background: #0a0a0a;
-  border-radius: 4px;
+  font-size: 10px;
+  color: #707070;
+  margin-top: 6px;
+  padding: 6px;
+  background: #080808;
+  border-radius: 3px;
   overflow-x: auto;
   max-width: 100%;
-  max-height: ${props => props.isExpanded ? '400px' : '60px'};
+  max-height: ${props => props.isExpanded ? '300px' : '0'};
   overflow-y: ${props => props.isExpanded ? 'auto' : 'hidden'};
-  position: relative;
-  transition: max-height 0.3s ease;
-  
-  ${props => !props.isExpanded && `
-    &::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 20px;
-      background: linear-gradient(transparent, #0a0a0a);
-      pointer-events: none;
-    }
-  `}
+  opacity: ${props => props.isExpanded ? '1' : '0'};
+  transition: all 0.2s ease;
   
   &::-webkit-scrollbar {
-    height: 6px;
-    width: 6px;
+    height: 4px;
+    width: 4px;
   }
   
   &::-webkit-scrollbar-track {
-    background: #0f0f0f;
+    background: #0a0a0a;
   }
   
   &::-webkit-scrollbar-thumb {
-    background: #3a3a3a;
-    border-radius: 3px;
+    background: #2a2a2a;
+    border-radius: 2px;
   }
 `;
 
 const StatusIndicator = styled.div<{ connected: boolean }>`
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: ${props => props.connected ? '#00ff8820' : '#ff555520'};
-  border: 1px solid ${props => props.connected ? '#00ff88' : '#ff5555'};
-  border-radius: 20px;
-  font-size: 11px;
+  gap: 4px;
+  padding: 4px 8px;
+  background: ${props => props.connected ? '#00ff8815' : '#ff555515'};
+  border: 1px solid ${props => props.connected ? '#00ff8860' : '#ff555560'};
+  border-radius: 12px;
+  font-size: 10px;
   font-weight: 600;
   color: ${props => props.connected ? '#00ff88' : '#ff5555'};
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
 `;
 
 const DataChannelZone = styled.div`
   background: #0f0f0f;
-  border-top: 1px solid #2a2a2a;
-  padding: 16px 20px;
+  border-top: 1px solid #1a1a1a;
+  padding: 10px 16px;
   flex-shrink: 0;
 `;
 
@@ -270,11 +328,11 @@ const DataChannelHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 `;
 
 const DataChannelTitle = styled.h3`
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -282,139 +340,122 @@ const DataChannelTitle = styled.h3`
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   
   &::before {
     content: '▪';
     color: #00aaff;
+    font-size: 8px;
   }
 `;
 
 const ChannelsList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
 `;
 
-const ChannelRow = styled.div`
+const ChannelItem = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  gap: 8px;
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  border-radius: 4px;
+  padding: 6px 8px;
 `;
 
 const ChannelInfo = styled.div`
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 180px;
+  gap: 2px;
 `;
 
-const ChannelLabel = styled.div`
-  font-size: 12px;
-  font-weight: 600;
-  color: #f0f0f0;
-`;
-
-const ChannelPeerId = styled.div`
-  font-size: 10px;
-  color: #808080;
-  font-family: monospace;
-`;
-
-const ChannelStatus = styled.div<{ state: string }>`
+const ChannelName = styled.div`
   font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 4px;
+  font-weight: 500;
+  color: #e0e0e0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`;
+
+const ChannelState = styled.span<{ state: string }>`
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 2px;
+  text-transform: uppercase;
   background: ${props => {
     switch(props.state) {
       case 'open': return '#00ff8820';
       case 'connecting': return '#ffaa0020';
-      case 'failed': 
-      case 'closed': return '#ff555520';
-      default: return '#80808020';
-    }
-  }};
-  border: 1px solid ${props => {
-    switch(props.state) {
-      case 'open': return '#00ff8840';
-      case 'connecting': return '#ffaa0040';
-      case 'failed':
-      case 'closed': return '#ff555540';
-      default: return '#80808040';
+      case 'closing': case 'closed': return '#ff555520';
+      default: return '#60606020';
     }
   }};
   color: ${props => {
     switch(props.state) {
       case 'open': return '#00ff88';
       case 'connecting': return '#ffaa00';
-      case 'failed':
-      case 'closed': return '#ff5555';
+      case 'closing': case 'closed': return '#ff5555';
       default: return '#808080';
     }
   }};
-  min-width: 80px;
-  text-align: center;
 `;
 
-const ChannelInputContainer = styled.div`
+const ChannelPeer = styled.div`
+  font-size: 10px;
+  color: #606060;
+`;
+
+const MessageForm = styled.form`
   display: flex;
-  gap: 8px;
-  align-items: center;
-  flex: 1;
+  gap: 4px;
+  margin-top: 4px;
 `;
 
-const ChannelInput = styled.input`
+const MessageInput = styled.input`
   flex: 1;
-  background: #0f0f0f;
+  background: #080808;
   border: 1px solid #2a2a2a;
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 12px;
+  border-radius: 3px;
+  padding: 4px 6px;
+  font-size: 10px;
   color: #f0f0f0;
   font-family: inherit;
-  transition: all 0.2s ease;
+  
+  &::placeholder {
+    color: #404040;
+  }
   
   &:focus {
     outline: none;
-    border-color: #00aaff;
-    background: #121212;
-  }
-  
-  &::placeholder {
-    color: #606060;
-  }
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+    border-color: #3a3a3a;
   }
 `;
 
-const ChannelSendButton = styled.button`
+const SendButton = styled.button`
   background: #00aaff;
   border: none;
-  border-radius: 6px;
-  padding: 6px 12px;
+  border-radius: 3px;
+  padding: 4px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: #0a0a0a;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   
   &:hover:not(:disabled) {
     background: #00ccff;
-    transform: translateY(-1px);
   }
   
   &:active:not(:disabled) {
-    transform: translateY(0);
+    transform: scale(0.95);
   }
   
   &:disabled {
@@ -425,9 +466,27 @@ const ChannelSendButton = styled.button`
 
 const NoChannelsMessage = styled.div`
   text-align: center;
-  padding: 24px;
+  padding: 16px;
+  color: #505050;
+  font-size: 11px;
+`;
+
+const EventStats = styled.div`
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
   color: #606060;
-  font-size: 13px;
+  margin-left: auto;
+`;
+
+const StatItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  
+  strong {
+    color: #909090;
+  }
 `;
 
 interface TimelineEvent {
@@ -445,12 +504,27 @@ interface TimelineProps {
   peerId: string;
 }
 
+const sourceColors = {
+  'DataChannel': '#00ff88',
+  'PeerConnection': '#00aaff',
+  'Room': '#ffaa00',
+  'System': '#808080'
+};
+
 export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
   const [events, setEvents] = React.useState<TimelineEvent[]>([]);
   const [isConnected, setIsConnected] = React.useState(false);
   const [expandedEvents, setExpandedEvents] = React.useState<Set<string>>(new Set());
+  const [activeFilters, setActiveFilters] = React.useState<Set<string>>(new Set(['DataChannel', 'PeerConnection', 'Room', 'System']));
+  const [searchQuery, setSearchQuery] = React.useState('');
+
   const [peer] = React.useState(() => new Peer({ peerId }));
-  const [room] = React.useState(() => new Peer.Room(roomId, new BroadcastChannelAdapter()));
+  const [room] = React.useState(() => new Room(roomId, {
+    adapter: new HTTPSignalingAdapter({ 
+      baseUrl: '/api',
+    })
+  }));
+
   const eventIdCounter = React.useRef(0);
   const [channelInputs, setChannelInputs] = React.useState<Map<string, string>>(new Map());
   const [dataChannels, setDataChannels] = React.useState<Map<string, { channel: RTCDataChannel, state: string, peer: RemotePeer, label?: string }>>(new Map());
@@ -469,6 +543,48 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
     setEvents(prev => [...prev, event]);
   };
 
+  // Filter events based on active filters and search query
+  const filteredEvents = React.useMemo(() => {
+    return events.filter(event => {
+      if (!activeFilters.has(event.source)) return false;
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return (
+          event.message.toLowerCase().includes(query) ||
+          event.eventType.toLowerCase().includes(query) ||
+          event.source.toLowerCase().includes(query) ||
+          (event.data && JSON.stringify(event.data).toLowerCase().includes(query))
+        );
+      }
+      return true;
+    });
+  }, [events, activeFilters, searchQuery]);
+
+  // Event statistics
+  const eventStats = React.useMemo(() => {
+    const stats = {
+      total: events.length,
+      errors: events.filter(e => e.type === 'error').length,
+      bySource: {} as Record<string, number>
+    };
+    events.forEach(event => {
+      stats.bySource[event.source] = (stats.bySource[event.source] || 0) + 1;
+    });
+    return stats;
+  }, [events]);
+
+  const toggleFilter = (source: string) => {
+    setActiveFilters(prev => {
+      const next = new Set(prev);
+      if (next.has(source)) {
+        next.delete(source);
+      } else {
+        next.add(source);
+      }
+      return next;
+    });
+  };
+
   React.useEffect(() => {
     const otherPeers = new Set<RemotePeer>();
     
@@ -479,9 +595,6 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
     room.on('presence', (event) => {
       const remotePeer = event.peer;
 
-
-      // addEvent('info', 'presence', 'Room', `${remotePeer.id} ${event.type}ed the room`, { peerId: remotePeer.id, type: event.type });
-      
       if (remotePeer instanceof RemotePeer) {
         const alreadySeen = otherPeers.has(remotePeer);
         otherPeers.add(remotePeer);
@@ -620,149 +733,111 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
       });
     });
 
-    // Cleanup function
     return () => {
-      setIsConnected(false);
+      // peer.disconnect();
     };
-  }, [roomId, peerId, peer, room]);
+  }, []);
 
-  const getEventIcon = (eventType: string) => {
-    switch (eventType) {
-      // DataChannel events
-      case 'open':
-      case 'connectionstatechange':
-      case 'iceconnectionstatechange':
-        return <Wifi width={10} height={10} />;
-      case 'close':
-        return <WifiOff width={10} height={10} />;
-      case 'message':
-        return <ArrowDown width={10} height={10} />;
-      case 'error':
-        return <WarningCircle width={10} height={10} />;
-      // Room events
-      case 'joined':
-      case 'presence':
-        return <CheckCircle width={10} height={10} />;
-      // PeerConnection events
-      case 'icecandidate':
-      case 'icegatheringstatechange':
-      case 'signalingstatechange':
-      case 'negotiationneeded':
-        return <Circle width={10} height={10} />;
-      // System events
-      case 'init':
-      case 'join':
-        return <Circle width={10} height={10} />;
-      default:
-        return <Circle width={10} height={10} />;
-    }
-  };
-
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', { 
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      fractionalSecondDigits: 3
+  const toggleEventExpansion = (eventId: string) => {
+    setExpandedEvents(prev => {
+      const next = new Set(prev);
+      if (next.has(eventId)) {
+        next.delete(eventId);
+      } else {
+        next.add(eventId);
+      }
+      return next;
     });
   };
-  
-  const sendMessage = (peerId: string) => {
-    const message = channelInputs.get(peerId);
-    if (!message?.trim()) return;
+
+  const handleSendMessage = (channelKey: string) => {
+    const channelData = dataChannels.get(channelKey);
+    const message = channelInputs.get(channelKey) || '';
     
-    const channelInfo = dataChannels.get(peerId);
-    if (!channelInfo || channelInfo.channel.readyState !== 'open') return;
-    
-    try {
-      channelInfo.peer.sendMessage(message);
-      addEvent('success', 'SEND', 'DataChannel', `Message sent to ${peerId} (${channelInfo.label || 'default'})`, { 
-        peerId, 
-        message,
-        label: channelInfo.label 
-      });
-      
-      // Clear the input for this channel
-      setChannelInputs(prev => {
-        const newMap = new Map(prev);
-        newMap.set(peerId, '');
-        return newMap;
-      });
-    } catch (error) {
-      addEvent('error', 'SEND_ERROR', 'DataChannel', `Failed to send message to ${peerId}`, { 
-        peerId, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      });
+    if (channelData && message.trim()) {
+      try {
+        channelData.channel.send(message);
+        addEvent('success', 'message', 'DataChannel', `Sent: ${message}`, { 
+          channel: channelData.label,
+          sent: true,
+          data: message 
+        });
+        setChannelInputs(prev => new Map(prev).set(channelKey, ''));
+      } catch (error) {
+        addEvent('error', 'message', 'DataChannel', `Failed to send message: ${error}`, { error });
+      }
     }
   };
 
   return (
     <Container>
       <Header>
-        <Title>Honeypipe Event Timeline</Title>
         <ConnectionInfo>
           <InfoItem>Room: <span>{roomId}</span></InfoItem>
-          <InfoItem>Peer: <span>{peerId}</span></InfoItem>
+          <InfoItem>Peer: <span>{peer.id}</span></InfoItem>
           <StatusIndicator connected={isConnected}>
-            {isConnected ? (
-              <>
-                <Wifi width={12} height={12} />
-                Connected
-              </>
-            ) : (
-              <>
-                <WifiOff width={12} height={12} />
-                Disconnected
-              </>
-            )}
+            {isConnected ? <Wifi width={12} height={12} /> : <WifiOff width={12} height={12} />}
+            {isConnected ? 'Connected' : 'Disconnected'}
           </StatusIndicator>
         </ConnectionInfo>
       </Header>
-      
+
+      <FilterSection>
+        <FilterLabel>
+          <Filter width={12} height={12} />
+          Filters:
+        </FilterLabel>
+        {Object.entries(sourceColors).map(([source, color]) => (
+          <FilterTag
+            key={source}
+            active={activeFilters.has(source)}
+            color={color}
+            onClick={() => toggleFilter(source)}
+          >
+            {source} ({eventStats.bySource[source] || 0})
+          </FilterTag>
+        ))}
+        <EventStats>
+          <StatItem>Total: <strong>{eventStats.total}</strong></StatItem>
+          <StatItem>Errors: <strong>{eventStats.errors}</strong></StatItem>
+        </EventStats>
+        <SearchInput
+          type="text"
+          placeholder="Search events..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </FilterSection>
+
       <TimelineContainer>
         <AnimatePresence>
-          {[...events].reverse().map((event) => (
-            <EventItem 
-              key={event.id} 
+          {[...filteredEvents].reverse().map((event) => (
+            <EventItem
+              key={event.id}
               type={event.type}
-              initial={{ opacity: 0, x: -20, scale: 0.95 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 20, scale: 0.95 }}
-              transition={{ 
-                duration: 0.3, 
-                ease: "easeOut",
-                scale: { duration: 0.2 }
-              }}
-              layout
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.2 }}
             >
-              <EventContent 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const newExpanded = new Set(expandedEvents);
-                  if (expandedEvents.has(event.id)) {
-                    newExpanded.delete(event.id);
-                  } else {
-                    newExpanded.add(event.id);
-                  }
-                  setExpandedEvents(newExpanded);
-                }}
-              >
+              <EventDot type={event.type} />
+              <EventContent onClick={() => toggleEventExpansion(event.id)}>
                 <EventHeader>
                   <EventHeaderLeft>
                     <SourceTag source={event.source}>{event.source}</SourceTag>
-                    <EventType type={event.type}>{event.eventType}</EventType>
-                  </EventHeaderLeft>
-                  <EventTime>{formatTime(event.timestamp)}</EventTime>
-                  {event.data && (
-                    <ExpandIcon>
-                      {expandedEvents.has(event.id) ? (
-                        <NavArrowDown width={14} height={14} />
-                      ) : (
-                        <NavArrowRight width={14} height={14} />
-                      )}
+                    <EventType>{event.eventType}</EventType>
+                    <ExpandIcon expanded={expandedEvents.has(event.id)}>
+                      <NavArrowRight width={12} height={12} />
                     </ExpandIcon>
-                  )}
+                  </EventHeaderLeft>
+                  <EventTime>
+                    {event.timestamp.toLocaleTimeString([], { 
+                      hour: '2-digit', 
+                      minute: '2-digit', 
+                      second: '2-digit',
+                      fractionalSecondDigits: 3 
+                    })}
+                  </EventTime>
                 </EventHeader>
                 <EventMessage>{event.message}</EventMessage>
                 {event.data && (
@@ -775,53 +850,46 @@ export const Timeline: React.FC<TimelineProps> = ({ roomId, peerId }) => {
           ))}
         </AnimatePresence>
       </TimelineContainer>
-      
+
       <DataChannelZone>
         <DataChannelHeader>
           <DataChannelTitle>Data Channels</DataChannelTitle>
         </DataChannelHeader>
-        
-        <ChannelsList>
-          {dataChannels.size === 0 ? (
-            <NoChannelsMessage>No active data channels</NoChannelsMessage>
-          ) : ( 
-            Array.from(dataChannels.entries()).map(([peerId, info]) => (
-              <ChannelRow key={peerId}>
+        {dataChannels.size > 0 ? (
+          <ChannelsList>
+            {Array.from(dataChannels.entries()).map(([key, { channel, state, peer, label }]) => (
+              <ChannelItem key={key}>
                 <ChannelInfo>
-                  <ChannelLabel>{info.label || 'default'}</ChannelLabel>
-                  <ChannelPeerId>{peerId}</ChannelPeerId>
+                  <ChannelName>
+                    {label || 'unnamed'} 
+                    <ChannelState state={state}>
+                      {state}
+                      {channel.readyState}
+                    </ChannelState>
+                  </ChannelName>
+                  <ChannelPeer>with {peer.id}</ChannelPeer>
                 </ChannelInfo>
-                
-                <ChannelStatus state={info.channel.readyState}>
-                  {info.channel.readyState}
-                </ChannelStatus>
-                
-                <ChannelInputContainer>
-                  <ChannelInput
+                  <MessageInput
                     type="text"
                     placeholder="Type a message..."
-                    value={channelInputs.get(peerId) || ''}
-                    onChange={(e) => {
-                      setChannelInputs(prev => {
-                        const newMap = new Map(prev);
-                        newMap.set(peerId, e.target.value);
-                        return newMap;
-                      });
-                    }}
-                    onKeyPress={(e) => e.key === 'Enter' && sendMessage(peerId)}
-                    disabled={info.channel.readyState !== 'open'}
+                    value={channelInputs.get(key) || ''}
+                    onChange={(e) => setChannelInputs(prev => new Map(prev).set(key, e.target.value))}
                   />
-                  <ChannelSendButton
-                    onClick={() => sendMessage(peerId)}
-                    disabled={info.channel.readyState !== 'open' || !(channelInputs.get(peerId)?.trim())}
+                  <SendButton
+                    disabled={channel.readyState !== 'open'}
+                    onClick={() => {
+                      console.log('channel', channel);
+                      handleSendMessage(key)
+                    }}
                   >
                     <Send width={12} height={12} />
-                  </ChannelSendButton>
-                </ChannelInputContainer>
-              </ChannelRow>
-            ))
-          )}
-        </ChannelsList>
+                  </SendButton>
+              </ChannelItem>
+            ))}
+          </ChannelsList>
+        ) : (
+          <NoChannelsMessage>No data channels established yet</NoChannelsMessage>
+        )}
       </DataChannelZone>
     </Container>
   );

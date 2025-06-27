@@ -377,17 +377,15 @@ export const ConfigUI: React.FC<ConfigUIProps> = ({ onConfigChange }) => {
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'row', gap: '30px', padding: '30px', height: '100vh' }}>
-        
-      <Container style={{ flex: 1}}>
-        <Header>Playground Configuration</Header>
-        
-        <Section>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <Label htmlFor="roomId">Room Identifier</Label>
+      
+      <Container style={{ flex: 3}}>
+          <Section style={{ display: 'flex', flexDirection: 'row', gap: '10px' }}>
+          <Label htmlFor="roomId">Room Identifier</Label>
             <InputGroup>
               <InputField
                 id="roomId"
                 value={roomId}
+
                 onChange={(e) => {
                   setRoomId(e.target.value);
                   triggerConfigChange({ roomId: e.target.value });
@@ -397,12 +395,7 @@ export const ConfigUI: React.FC<ConfigUIProps> = ({ onConfigChange }) => {
                 disabled
               />
             </InputGroup>
-          </div>
-        </Section>
-        <Section>
-            <Label>Peer Configuration</Label>
-
-            <PeersGrid style={{ flex: 1, display: 'flex', flexDirection: 'row', gap: '10px' }}>
+          <PeersGrid style={{ flex: 1, display: 'flex', flexDirection: 'row', gap: '10px' }}>
               {peerIds.map((peerId, index) => (
                 <PeerBlock key={index}>
                   {peerIds.length > 1 && (
@@ -425,9 +418,6 @@ export const ConfigUI: React.FC<ConfigUIProps> = ({ onConfigChange }) => {
               </AddPeerBlock>
             </PeersGrid>
           </Section>
-      </Container>
-      <Container style={{ flex: 3}}>
-        <Header>Peer Connections</Header>
     
           <IframesSection>
             <IframesGrid>

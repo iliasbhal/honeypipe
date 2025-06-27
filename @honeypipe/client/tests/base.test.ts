@@ -1,15 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import '../src/utils/polyfill';
 import { Peer } from '../src/Peer';
-import { InMemorySignalingAdapter } from '../src/adapters/InMemorySignalingAdapter';
+import { SignalBroker } from '../src/SignalBroker';
 import { wait } from '../src/utils/wait';
+import { Room } from '../src/Room';
 
 describe('Basic Connection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  const signalingAdapter = new InMemorySignalingAdapter();
+  const signalingAdapter = new SignalBroker();
   const roomId = 'test-room-1';
 
   type MessageContent = {
@@ -17,17 +18,17 @@ describe('Basic Connection', () => {
   };
 
   const aliceSpy = vi.fn();
-  const roomAlice = new Peer.Room<MessageContent>(roomId, signalingAdapter);
+  const roomAlice = new Room<MessageContent>(roomId, { adapter: signalingAdapter });
   const alice = new Peer({ peerId: 'Alice' });
   roomAlice.on('presence', (event) => aliceSpy({ type: event.type, peerId: event.peer.id }));
 
   const bobSpy = vi.fn();
-  const roomBob = new Peer.Room<MessageContent>(roomId, signalingAdapter);
+  const roomBob = new Room<MessageContent>(roomId, { adapter: signalingAdapter });
   const bob = new Peer({ peerId: 'Bob' });
   roomBob.on('presence', (event) => bobSpy({ type: event.type, peerId: event.peer.id }));
 
   const charlieSpy = vi.fn();
-  const roomCharlie = new Peer.Room<MessageContent>(roomId, signalingAdapter);
+  const roomCharlie = new Room<MessageContent>(roomId, { adapter: signalingAdapter });
   const charlie = new Peer({ peerId: 'Charlie' });
   roomCharlie.on('presence', (event) => charlieSpy({ type: event.type, peerId: event.peer.id }));
 
@@ -85,7 +86,7 @@ describe('Basic Connection', () => {
   });
 
   it('should allow newcomer to joing the room', async () => {
-    const roomDan = new Peer.Room<MessageContent>(roomId, signalingAdapter);
+    const roomDan = new Room<MessageContent>(roomId, { adapter: signalingAdapter });
     const dan = new Peer({ peerId: 'Dan' });
     const danSpy = vi.fn();
     roomDan.on('presence', (event) => danSpy({ type: event.type, peerId: event.peer.id }));

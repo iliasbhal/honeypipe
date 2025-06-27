@@ -7,10 +7,12 @@
     "dev": "vite"
   },
   "dependencies": {
+    "@honeypipe/client": "*",
     "@number-flow/react": "^0.5.10",
+    "ably": "^2.9.0",
     "convex": "^1.24.8",
     "express": "^5.1.0",
-    "@honeypipe/client": "*",
+    "firebase": "^11.9.1",
     "iconoir-react": "^7.11.0",
     "motion": "^12.16.0",
     "nuqs": "^2.4.3",

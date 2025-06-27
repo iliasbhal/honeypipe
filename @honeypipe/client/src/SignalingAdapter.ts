@@ -22,18 +22,16 @@ export type SignalingEvent = {
 })
 
 export type SignalPullRequest = {
+  after: string;
+} & ({
   roomId: string;
-  offsetIndex: number;
 } | {
   channelId: string;
-  offsetIndex: number;
-}
+});
 
 export interface SignalingAdapter {
   push(event: SignalingEvent): Promise<void>;
   pull(request: SignalPullRequest): Promise<SignalingEvent[]>;
-  close(): Promise<void>;
-  getRtcConfiguration(): RTCConfiguration;
 }
 
 export interface RemotePeerData {

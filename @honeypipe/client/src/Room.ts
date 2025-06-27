@@ -1,4 +1,4 @@
-import { SignalingAdapter } from './adapters/_base';
+import { SignalingAdapter } from './SignalingAdapter';
 import { Peer } from './Peer';
 import { RemotePeer } from './RemotePeer';
 import { EventEmitter } from './utils/EventEmitter';
@@ -6,6 +6,11 @@ import { EventEmitter } from './utils/EventEmitter';
 interface RoomEvents<MessageType = any> {
   presence: (event: { peer: RemotePeer | Peer, type: 'join' | 'alive' | 'leave' }) => void,
   message: (event: { peer: RemotePeer | Peer, message: MessageType }) => void,
+}
+
+interface RoomConfig {
+  adapter: SignalingAdapter;
+  rtcConfiguration?: RTCConfiguration;
 }
 
 /**
@@ -18,11 +23,11 @@ export class Room<MessageType = any> {
   };
 
   readonly id: string;
-  readonly signalingAdapter: SignalingAdapter;
+  readonly config: RoomConfig;
 
-  constructor(id: string, signalingAdapter: SignalingAdapter) {
+  constructor(id: string, config: RoomConfig) {
     this.id = id;
-    this.signalingAdapter = signalingAdapter;
+    this.config = config;
   }
 
   private eventEmitter = new EventEmitter<RoomEvents<MessageType>>();

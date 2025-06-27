@@ -4,11 +4,12 @@
   "private": true,
   "workspaces": [
     "@honeypipe/*",
-    "playground"
+    "playground",
+    "worker"
   ],
   "scripts": {
     "dev": "yarn playground dev",
-    "playground": "yarn workspace playground",
+    "worker": "yarn workspace worker",
     "client": "yarn workspace @honeypipe/client"
   },
   "devDependencies": {

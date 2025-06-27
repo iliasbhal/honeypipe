@@ -2,7 +2,7 @@ import superJSON from 'superjson';
 import { Peer } from './Peer';
 import { Room } from './Room';
 import { RemotePeer } from './RemotePeer';
-import { SignalingEvent } from './adapters/_base';
+import { SignalingEvent } from './SignalingAdapter';
 import { wait } from './utils/wait';
 import { EventEmitter } from './utils/EventEmitter';
 import { v7 as uuidv7 } from 'uuid';
@@ -46,7 +46,7 @@ export class RoomConnection<MessageType = any> extends EventEmitter<RoomConnecti
       started: false,
       abortController: new AbortController(),
       joinSignalCount: 0,
-      pullOffsetIndex: 0,
+      lastEventId: null,
     };
   }
 
@@ -76,7 +76,7 @@ export class RoomConnection<MessageType = any> extends EventEmitter<RoomConnecti
         } as const;
 
         this.emit('sentSignal', signalEvent);
-        this.room.signalingAdapter.push(signalEvent);
+        this.room.config.adapter.push(signalEvent);
         await wait(2000);
       }
     })
@@ -90,24 +90,17 @@ export class RoomConnection<MessageType = any> extends EventEmitter<RoomConnecti
       const maxWaitTime = 5000; // Cap at 5 seconds
 
       while (!abortSignal.aborted) {
-        const events = await this.room.signalingAdapter.pull({
+        const lastEventId = this.peerSingalLoop.lastEventId;
+        const events = await this.room.config.adapter.pull({
           roomId: this.room.id,
-          offsetIndex: this.peerSingalLoop.pullOffsetIndex,
+          after: lastEventId,
         });
-
-        // console.log('pulling room events', this.peer.id, this.room.id, {
-        //   events,
-        //   all: await this.room.signalingAdapter.pull({
-        //     roomId: this.room.id,
-        //     offsetIndex: 0,
-        //   }),
-        // });
 
         for (const event of events) {
           this.processSignalingEvent(event);
+          this.peerSingalLoop.lastEventId = event.id;
         }
 
-        this.peerSingalLoop.pullOffsetIndex += events.length;
         const hasEvents = events.length > 0;
         waitTime = hasEvents ? 100 : Math.min(waitTime * 2, maxWaitTime);
         await wait(waitTime);
@@ -208,7 +201,7 @@ export class RoomConnection<MessageType = any> extends EventEmitter<RoomConnecti
     this.stateByPeer.clear();
 
     await Promise.all([
-      this.room.signalingAdapter.push({
+      this.room.config.adapter.push({
         id: uuidv7(),
         roomId: this.room.id,
         peerId: this.peer.id,

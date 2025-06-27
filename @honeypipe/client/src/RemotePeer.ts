@@ -1,10 +1,11 @@
-import { SignalingEvent } from './adapters/_base';
+import { SignalingEvent } from './SignalingAdapter';
 import { RoomConnection } from './RoomConnection';
 import { Room } from './Room';
 import { wait } from './utils/wait';
 import * as superJSON from 'superjson'
 import { EventEmitter } from './utils/EventEmitter';
 import { v7 as uuidv7 } from 'uuid';
+import { DEFAULT_RTC_CONFIGURATION } from './config';
 
 /**
  * RemotePeer provides channel-specific operations for a peer
@@ -18,7 +19,6 @@ export class RemotePeer<MessageType = any> extends EventEmitter<RemotePeerEvents
 
   private peerConnection: RTCPeerConnection | null = null;
   private dataChannel: RTCDataChannel | null = null;
-  private signalingEvents: SignalingEvent[] = [];
 
   static getChannelId(peerId1: string, peerId2: string, roomId: string) {
     if (peerId1 === peerId2) {
@@ -164,13 +164,14 @@ export class RemotePeer<MessageType = any> extends EventEmitter<RemotePeerEvents
       started: false,
       abortController: new AbortController(),
       offerSignalCount: 0,
+      lastEventId: null,
     };
   }
 
   getChannelPeerConnection() {
     if (this.peerConnection) return this.peerConnection;
 
-    const rtcConfiguration = this.room.signalingAdapter.getRtcConfiguration()
+    const rtcConfiguration = this.room.config.rtcConfiguration || DEFAULT_RTC_CONFIGURATION;
     this.peerConnection = new RTCPeerConnection(rtcConfiguration);
     this.setupPeerConnection(this.peerConnection);
     return this.peerConnection;
@@ -268,15 +269,16 @@ export class RemotePeer<MessageType = any> extends EventEmitter<RemotePeerEvents
 
       while (!abortSignal.aborted) {
 
-        const events = await this.room.signalingAdapter.pull({
+        const lastEventId = this.peerSingalLoop.lastEventId;
+        const events = await this.room.config.adapter.pull({
           channelId: this.channelId,
-          offsetIndex: this.signalingEvents.length,
+          after: lastEventId,
         });
 
         // console.log('pulling events (channel)', this.localPeerId, '->', this.otherPeerId, events);
         for (const event of events) {
-          this.signalingEvents.push(event);
           this.processSignalingEvent(event);
+          this.peerSingalLoop.lastEventId = event.id;
         }
 
         const hasEvents = events.length > 0;
@@ -383,7 +385,7 @@ export class RemotePeer<MessageType = any> extends EventEmitter<RemotePeerEvents
 
   sendSignal(signalEvent: SignalingEvent) {
     this.emit('sentSignal', signalEvent);
-    this.room.signalingAdapter.push(signalEvent)
+    this.room.config.adapter.push(signalEvent)
   }
 
   async handleIceCandidate(iceCandidate: RTCIceCandidateInit) {

@@ -1,8 +1,8 @@
 {
   "private": false,
   "name": "@honeypipe/client",
-  "version": "0.0.5",
-  "description": "It's actually very very easy to do WebRTC",
+  "version": "0.0.6",
+  "description": "Sweet, smooth, and simple WebRTC connections",
   "author": "ilias.bhal@gmail.com",
   "license": "MIT",
   "type": "module",

@@ -1,6 +1,6 @@
 import { Room } from './Room';
 import { RoomConnection } from './RoomConnection';
-import { v7 as uuidv7 } from 'uuid';
+import { uuid } from './utils/uuid';
 
 export interface PeerOptions {
   peerId: string;
@@ -11,7 +11,7 @@ export interface PeerOptions {
  * Use peer.via(room) or peer.via(channel) to interact with rooms and channels
  */
 export class Peer {
-  static GlobalId = uuidv7();
+  static GlobalId = uuid();
   readonly peerId: string;
   private roomConnections = new WeakMap<Room, RoomConnection>(); // roomId -> PeerRoom instance
 
@@ -29,7 +29,7 @@ export class Peer {
    * @returns The peer id
    */
   private createPeerId(peerId?: string) {
-    return (peerId || uuidv7()) + '-' + Peer.GlobalId;
+    return (peerId || uuid()) + '-' + Peer.GlobalId;
   }
 
   get id(): string {

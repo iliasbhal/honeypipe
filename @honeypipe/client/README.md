@@ -1,9 +1,9 @@
-<img src="./assets/readme-hero.svg" />
+<img src="./assets/hero.svg" />
 <div style="margin-bottom: 30px"></div>
 
 # 🍯 HoneyPipe
 
-> _Sweet, smooth, and surprisingly simple WebRTC connections_
+> _Sweet, smooth, and simple WebRTC connections_
 
 ## 🐝 What's the Buzz?
 
@@ -31,15 +31,19 @@ pnpm add @honeypipe/client
 
 ### Basic Setup
 
-```typescript
-import { Peer } from "@honeypipe@/client"
-import { InMemorySignalingAdapter } from "honeypipe/adapters"
+> **Note**: By default, HoneyPipe uses the public signaling server at `https://honeypipe.wasmer.app`. For production use, consider hosting your own signaling server.
 
-// Create a signaling adapter (you can also implement your own!)
-const signalingAdapter = new InMemorySignalingAdapter()
+```typescript
+import { Peer, Room } from "@honeypipe/client"
 
 // Create a room - think of it as a space where peers can meet
-const room = new Peer.Room<{ type: "chat"; message: string }>("room-123", signalingAdapter)
+// By default, it uses FetchSignalAdapter with https://honeypipe.wasmer.app
+const room = new Room<{ type: "chat"; message: string }>("room-123")
+
+// Or configure with a custom adapter
+// const room = new Room<{ type: "chat"; message: string }>("room-123", {
+//   adapter: new FetchSignalAdapter({ baseUrl: "https://your-server.com" })
+// })
 
 // Create peers - each peer is like a bee in the hive
 const alice = new Peer({ peerId: "alice" })
@@ -143,8 +147,7 @@ room.on("message", (event) => {
 ### Real-World Example: Chat Room
 
 ```typescript
-import { Peer } from "@honeypipe"
-import { InMemorySignalingAdapter } from "honeypipe/adapters"
+import { Peer, Room, RoomConnection } from "@honeypipe/client"
 
 interface ChatMessage {
   type: "message" | "typing" | "reaction"
@@ -155,14 +158,12 @@ interface ChatMessage {
 
 class ChatRoom {
   private peer: Peer
-  private room: Peer.Room<ChatMessage>
-  private connection: any // RoomConnection<ChatMessage>
+  private room: Room<ChatMessage>
+  private connection: RoomConnection<ChatMessage>
 
   constructor(userId: string, roomId: string) {
-    const signalingAdapter = new InMemorySignalingAdapter()
-
     this.peer = new Peer({ peerId: userId })
-    this.room = new Peer.Room<ChatMessage>(roomId, signalingAdapter)
+    this.room = new Room<ChatMessage>(roomId)
 
     // Set up event handling
     this.room.on("presence", (event) => {
@@ -245,16 +246,6 @@ yarn dev
 
 HoneyPipe uses signaling adapters to facilitate peer discovery. Choose the one that fits your architecture:
 
-### InMemorySignalingAdapter
-
-Perfect for local development and testing. All peers must share the same adapter instance.
-
-```typescript
-import { InMemorySignalingAdapter } from "honeypipe/adapters"
-
-const adapter = new InMemorySignalingAdapter()
-```
-
 ### FetchSignalingAdapter
 
 For client-server architectures using HTTP polling.
@@ -264,30 +255,6 @@ import { FetchSignalingAdapter } from "honeypipe/adapters"
 
 const adapter = new FetchSignalingAdapter({
   serverUrl: "https://your-signaling-server.com",
-})
-```
-
-### PostMessageSignalingAdapter
-
-For iframe-based communication or web workers.
-
-```typescript
-import { PostMessageSignalingAdapter } from "honeypipe/adapters"
-
-const adapter = new PostMessageSignalingAdapter({
-  target: window.parent,
-})
-```
-
-### RedisSignalingAdapter
-
-For server-side applications using Redis as a message broker.
-
-```typescript
-import { RedisSignalingAdapter } from "honeypipe/adapters"
-
-const adapter = new RedisSignalingAdapter({
-  redis: redisClient,
 })
 ```
 

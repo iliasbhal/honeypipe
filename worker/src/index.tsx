@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import { SignalBroker, SignalingEvent, SignalPullRequest } from '@honeypipe/client';
 
+
+
 const API = new Hono();
 
 export default API;
@@ -10,6 +12,14 @@ const signalBroker = new SignalBroker();
 API.get('/health', async (c) => {
   return await c.text('OK', 200);
 });
+
+const instanceID = Date.now().toString();
+API.get('/metadata', async (c) => {
+  return await c.json({
+    appVersion: process.env.WASMER_APP_VERSION_ID,
+    instanceId: instanceID,
+  }, 200);
+})
 
 API.get('/push', async (c) => {
   const query = await c.req.query();

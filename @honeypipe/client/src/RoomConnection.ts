@@ -5,7 +5,7 @@ import { RemotePeer } from './RemotePeer';
 import { SignalingEvent } from './SignalingAdapter';
 import { wait } from './utils/wait';
 import { EventEmitter } from './utils/EventEmitter';
-import { v7 as uuidv7 } from 'uuid';
+import { uuid } from './utils/uuid';
 
 export type RoomMessageHandler = (message: { from: RemotePeer, content: string }) => void;
 export type RoomPresenceHandler = (remotePeer: RemotePeer) => void;
@@ -69,7 +69,7 @@ export class RoomConnection<MessageType = any> extends EventEmitter<RoomConnecti
         this.peerSingalLoop.joinSignalCount += 1;
 
         const signalEvent = {
-          id: uuidv7(),
+          id: uuid(),
           roomId: this.room.id,
           peerId: this.peer.id,
           type: isJoin ? 'join' : 'alive',
@@ -202,7 +202,7 @@ export class RoomConnection<MessageType = any> extends EventEmitter<RoomConnecti
 
     await Promise.all([
       this.room.config.adapter.push({
-        id: uuidv7(),
+        id: uuid(),
         roomId: this.room.id,
         peerId: this.peer.id,
         type: 'leave',

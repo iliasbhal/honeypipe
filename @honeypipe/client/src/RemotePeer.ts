@@ -4,8 +4,8 @@ import { Room } from './Room';
 import { wait } from './utils/wait';
 import * as superJSON from 'superjson'
 import { EventEmitter } from './utils/EventEmitter';
-import { v7 as uuidv7 } from 'uuid';
 import { DEFAULT_RTC_CONFIGURATION } from './config';
+import { uuid } from './utils/uuid';
 
 /**
  * RemotePeer provides channel-specific operations for a peer
@@ -62,7 +62,7 @@ export class RemotePeer<MessageType = any> extends EventEmitter<RemotePeerEvents
         case 'icecandidate':
           if (!event.candidate) return;
           this.sendSignal({
-            id: uuidv7(),
+            id: uuid(),
             peerId: this.localPeerId,
             channelId: this.channelId,
             type: 'iceCandidate',
@@ -367,7 +367,7 @@ export class RemotePeer<MessageType = any> extends EventEmitter<RemotePeerEvents
     peerConnection.setLocalDescription(offer);
 
     this.sendSignal({
-      id: uuidv7(),
+      id: uuid(),
       peerId: this.localPeerId,
       channelId: this.channelId,
       type: 'sdpOffer',
@@ -377,7 +377,7 @@ export class RemotePeer<MessageType = any> extends EventEmitter<RemotePeerEvents
 
   async sendSdpRestart() {
     this.sendSignal({
-      id: uuidv7(),
+      id: uuid(),
       peerId: this.localPeerId,
       channelId: this.channelId,
       type: 'sdpRestart'
@@ -409,7 +409,7 @@ export class RemotePeer<MessageType = any> extends EventEmitter<RemotePeerEvents
     await peerConnection.setLocalDescription(answer);
 
     this.sendSignal({
-      id: uuidv7(),
+      id: uuid(),
       peerId: this.localPeerId,
       channelId: this.channelId,
       type: 'sdpAnswer',

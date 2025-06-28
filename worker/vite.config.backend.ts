@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     build(),
     devServer({
-      entry: 'backend/index.tsx'
+      entry: 'src/index.tsx'
     })
   ],
   server: {
